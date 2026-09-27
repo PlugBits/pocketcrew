@@ -88,6 +88,9 @@ PUSH_SUBJECT = get("server", "push_subject", "https://example.com")
 
 # ---- tmux / claude ----
 TMUX_SESSION = get("tmux", "session", "claude")
+# 別ソケット(-L)を使う tmux サーバーに向ける(既定は空 = 通常の /tmp/tmux-<uid>/default。
+# 検証用に本番と隔離したサーバーを別途動かすときだけ設定する。2026-09-27)
+TMUX_SOCKET = get("tmux", "socket", "")
 
 # ---- 並走スイッチ(旧版と同時に動かす間は false にして二重動作を防ぐ) ----
 JOBS_ENABLED = bool(get("features", "jobs", True))          # 定時ジョブ(日次まとめ・brief・remind など)

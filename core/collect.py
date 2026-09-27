@@ -20,12 +20,30 @@ TMUX_SESSION = C.TMUX_SESSION
 CARD_LINES = 12      # カードに出す末尾行数
 FULL_LINES = 200     # 展開時の行数
 
+# 別ソケットの tmux サーバーに向けるための下ごしらえ(2026-09-27)。本番は空文字のままで、
+# 通常の /tmp/tmux-<uid>/default を見る(挙動は変わらない)。検証用に隔離したサーバーを
+# 使うときだけ config.toml の [tmux] socket に名前を書く。全ての tmux 呼び出しはここを
+# 経由すること(直接 "tmux" を subprocess/sh に渡さない)。
+_TMUX_L = ["-L", C.TMUX_SOCKET] if C.TMUX_SOCKET else []
+_TMUX_L_STR = f"-L {C.TMUX_SOCKET} " if C.TMUX_SOCKET else ""
+
 
 def sh(cmd, timeout=5):
     try:
         return subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=timeout).stdout
     except Exception:
         return ""
+
+
+def tmux(*args, **kw):
+    """subprocess.run(["tmux", ...]) をソケット指定つきで呼ぶ薄いラッパー(timeout 未指定なら5秒)"""
+    kw.setdefault("timeout", 5)
+    return subprocess.run(["tmux", *_TMUX_L, *args], **kw)
+
+
+def shtmux(argstr: str, timeout=5):
+    """shtmux(f"...") をソケット指定つきで呼ぶ(パイプ・引用符が要る呼び出し向け)"""
+    return sh(f"tmux {_TMUX_L_STR}{argstr}", timeout=timeout)
 
 
 # ---------- マシン ----------
@@ -122,6 +140,129 @@ def detect_state(tail: str, has_proc: bool):
     return "unknown", ""
 
 
+# ---------- AskUserQuestion: 複数質問(タブ形式)の画面を読む(2026-09-27) ----------
+# Claude Code の AskUserQuestion は、質問が2つ以上だと画面上部にタブ行が出る
+#   例: "←  ☐ Cuisine  ☐ Format  ☐ Budget  ✔ Submit  →"
+# 1問だけなら、タブ行はチェック無しの1行だけで "✔ Submit" は出ない(例: " ☐ Coffee")。
+# 全問に答えると「Review your answers」の確認画面(タブは Submit が選択状態)に進む。
+# どちらの画面でも、選択肢は "❯ 1. " のように現在位置が出るだけで、数字キーを1つ押すと
+# 「その場で決定して次のタブへ自動で進む」(Enter は要らない)。
+#
+# 実機で確認した事故(2026-09-27): 電話側はこれまで choice 状態を「質問文をそのまま見せて、
+# 入力欄に数字を打って送ってね」という案内にしていた。その送信経路 send() は数字のあとに
+# 必ず Enter を追加送信し、届いたか怪しいと Enter を何度も送り直す(_confirm_delivered)。
+# ところがこの送り直しは「入力欄が空になったか」を input_box_draft() で見ており、この関数は
+# 選択中の行 "❯ 1. Dine in" を「未送信の下書き」と誤認する。そのため送り直しの Enter が、
+# 数字キーで既に進んだ次の質問の先頭候補(推奨)を黙って確定させ、最後は確認画面の
+# "1. Submit answers" まで押し進めてしまっていた。答えていない質問が本人の見ないまま
+# 提出される、というのがこのバグの実体。
+# 対策: choice の回答は send() を経由させず、数字キー1つだけを送る answer_choice() を使う
+# (Enter も送り直しも無い)。
+
+TAB_TOKEN_RE = re.compile(r"^([☐☒])\s*(.+)$")
+OPTION_RE = re.compile(r"^\s*(❯\s*)?(\d+)\.\s*(.*)$")
+CUR_TAB_ANSI_RE = re.compile(r"\x1b\[48;5;\d+m(.*?)\x1b\[49m", re.S)
+REVIEW_RE = re.compile(r"Review your answers|Ready to submit your answers")
+REVIEW_ITEM_RE = re.compile(r"^\s*[●○]\s*(.*)$")
+REVIEW_ANSWER_RE = re.compile(r"^\s*→\s*(.*)$")
+CHOICE_RX = dict(STATE_RULES)["choice"]
+
+
+def _choice_block(tail: str):
+    """detect_state と同じ切り出し(最後から2番目の区切り線ブロック)。choice 専用の追加解析に使う"""
+    parts = SEPARATOR.split(tail)
+    recent = "\n".join(parts[-3:]) if len(parts) >= 3 else tail
+    return parts[-2] if len(parts) >= 2 and CHOICE_RX.search(parts[-2]) else recent
+
+
+def _tabbar_line(block: str):
+    """タブ行(☐/☒ を含む行)を返す。無ければ None(承認・信頼・ログイン等、質問ピッカー以外)"""
+    for line in block.splitlines():
+        if "☐" in line or "☒" in line:
+            return line
+    return None
+
+
+def _parse_tabs(line: str):
+    """タブ行から [{"title","answered"}] を返す(← / → / ✔ Submit は除く)"""
+    tabs = []
+    for tok in re.split(r"\s{2,}", line.strip()):
+        tok = tok.strip()
+        if tok in ("←", "→", "") or tok.startswith("✔"):
+            continue
+        m = TAB_TOKEN_RE.match(tok)
+        if m:
+            tabs.append({"title": m.group(2).strip(), "answered": m.group(1) == "☒"})
+    return tabs
+
+
+def _parse_options(lines):
+    """選択肢の行を拾う([番号]. ラベル + 次行のインデント説明)。"Type something." は自由入力欄なので除く"""
+    out = []
+    i = 0
+    while i < len(lines):
+        m = OPTION_RE.match(lines[i])
+        if m:
+            label = m.group(3).strip()
+            desc = ""
+            if i + 1 < len(lines) and not OPTION_RE.match(lines[i + 1]) and lines[i + 1].strip():
+                desc = lines[i + 1].strip()
+                i += 1
+            if label.rstrip(".").strip().lower() not in ("type something", ""):
+                out.append({"n": int(m.group(2)), "label": label, "desc": desc, "recommended": bool(m.group(1))})
+        i += 1
+    return out
+
+
+def _find_prompt(lines):
+    """タブ行・選択肢以外で最初に出てくる行(質問文の本体)"""
+    for l in lines:
+        s = l.strip()
+        if s and not OPTION_RE.match(l) and "☐" not in s and "☒" not in s:
+            return s
+    return ""
+
+
+def parse_choice(tail: str, raw: str):
+    """choice 状態の画面を構造化する。判定できなければ None(承認・信頼・ログイン・アンケート等)。
+    tail は色無しの末尾、raw は色付きの末尾(現在のタブを ANSI の背景色から見分けるのに使う)。"""
+    block = _choice_block(tail)
+    tabbar = _tabbar_line(block)
+    if tabbar is None:
+        return None
+    lines = [l for l in block.splitlines() if l.strip()]
+    is_multi = "✔" in tabbar and "Submit" in tabbar
+    if not is_multi:
+        # タブ行はあるが Submit が無い = 質問1つだけの画面。電話側は今まで通りの表示に任せる
+        return {"kind": "single", "prompt": _find_prompt(lines), "options": _parse_options(lines)}
+    tabs = _parse_tabs(tabbar)
+    if REVIEW_RE.search(block):
+        review = []
+        rl = block.splitlines()
+        for i, l in enumerate(rl):
+            qm = REVIEW_ITEM_RE.match(l)
+            if qm and i + 1 < len(rl):
+                am = REVIEW_ANSWER_RE.match(rl[i + 1])
+                if am:
+                    review.append({"q": qm.group(1).strip(), "a": am.group(1).strip()})
+        return {"kind": "review", "tabs": tabs, "total": len(tabs), "review": review,
+                "options": _parse_options(lines)}
+    # 現在のタブ: 色付きの末尾から、背景色つきの区間(選ばれているタブ)のテキストを探す。
+    # 一番あとに出てきたもの(=画面の一番下、いちばん新しい描画)を採用する
+    cur_title = None
+    for m in CUR_TAB_ANSI_RE.finditer(raw):
+        t = ANSI.sub("", m.group(1)).strip()
+        t = re.sub(r"^[☐☒✔]\s*", "", t).strip()
+        if t:
+            cur_title = t
+    index = next((i + 1 for i, t in enumerate(tabs) if t["title"] == cur_title), None)
+    if index is None:
+        # 色つき判定に失敗したときの保険: 最初の未回答タブを「いま」とみなす
+        index = next((i + 1 for i, t in enumerate(tabs) if not t["answered"]), len(tabs))
+    return {"kind": "multi", "tabs": tabs, "total": len(tabs), "index": index,
+            "prompt": _find_prompt(lines), "options": _parse_options(lines)}
+
+
 # 2026-09-22 に「● = 実行中 / ◯ = 終了済み」として ◯ を捨てたが、2026-09-24 の実画面では
 # ● は選択中の行(ふだんは main)の印で、実行中のサブエージェントも ◯ だった。そのため衛星が
 # 出ず、rc も待機に見えていた。今の Claude Code は終わったサブエージェントを一覧から消すので、
@@ -177,7 +318,7 @@ def sessions():
     """tmux セッション claude の各ウィンドウ = 1セッション"""
     out = []
     # -a を付けると -t が無視され、tmux サーバー上の全セッションを拾う(2026-09-24: 別セッションの砂場に本物のスレが混ざった)
-    panes = sh(f"tmux list-panes -s -t {TMUX_SESSION} -F '#{{window_name}}\t#{{pane_pid}}\t#{{pane_id}}\t#{{window_activity}}'")
+    panes = shtmux(f"list-panes -s -t {TMUX_SESSION} -F '#{{window_name}}\t#{{pane_pid}}\t#{{pane_id}}\t#{{window_activity}}'")
     procs = {}
     for line in sh("ps -eo pid=,ppid=,etimes=,times=,args=").splitlines():
         p = line.split(None, 4)
@@ -192,7 +333,7 @@ def sessions():
         except ValueError:
             continue
         pr = procs.get(ppid)
-        raw = sh(f"tmux capture-pane -p -e -J -t {pane} -S -{FULL_LINES}")   # 色付き(ゴースト文字の判定用)
+        raw = shtmux(f"capture-pane -p -e -J -t {pane} -S -{FULL_LINES}")   # 色付き(ゴースト文字の判定用)
         tail = ANSI.sub("", raw)
         state, question = detect_state(tail, pr is not None)
         if state == "typed" and GHOST.search(raw):
@@ -204,6 +345,8 @@ def sessions():
         agents = detect_agents(tail) if pr else []
         if state == "idle" and agents:
             state = "working"       # サブエージェントが動いている間は本体が待っていても作業中
+        # AskUserQuestion の複数質問(タブ形式)/確認画面を構造化する(単問はこれまで通り question のみ)
+        choice = parse_choice(tail, raw) if state == "choice" else None
         if pr and reg.get(win, {}).get("name") != pr["name"]:
             reg[win] = {**reg.get(win, {}), "name": pr["name"], "last_seen": datetime.datetime.now(LOCAL).isoformat(timespec="seconds")}
             changed = True
@@ -215,6 +358,7 @@ def sessions():
             "cpu_s": pr["cpu_s"] if pr else 0,
             "state": state,
             "question": question,
+            "choice": choice,
             "last_activity_s": max(0, int(time.time()) - int(activity or 0)),
             "tail": last_output(tail, CARD_LINES),
             "agents": agents,
@@ -286,7 +430,7 @@ def ensure_default_briefs():
 def pane_full(window: str):
     if not re.fullmatch(r"[\w\-]+", window):
         return ""
-    return sh(f"tmux capture-pane -p -J -t {TMUX_SESSION}:{window} -S -{FULL_LINES}")
+    return shtmux(f"capture-pane -p -J -t {TMUX_SESSION}:{window} -S -{FULL_LINES}")
 
 
 # ---------- 送信(v1) ----------
@@ -296,7 +440,7 @@ LOG_DIR = C.LOG_DIR
 def window_exists(window: str) -> bool:
     if not re.fullmatch(r"[\w\-]+", window):
         return False
-    return window in sh(f"tmux list-windows -t {TMUX_SESSION} -F '#{{window_name}}'").split()
+    return window in shtmux(f"list-windows -t {TMUX_SESSION} -F '#{{window_name}}'").split()
 
 
 # 送信の直列化(2026-09-22)。送信元がプロセスをまたぐ(サーバー本体・Main が起動する単発
@@ -336,7 +480,7 @@ def input_box_draft(raw: str) -> str:
 
 
 def _pane_raw(window: str) -> str:
-    return sh(f"tmux capture-pane -p -e -J -t {TMUX_SESSION}:{window} -S -{FULL_LINES}")
+    return shtmux(f"capture-pane -p -e -J -t {TMUX_SESSION}:{window} -S -{FULL_LINES}")
 
 
 def _confirm_delivered(window: str):
@@ -349,7 +493,7 @@ def _confirm_delivered(window: str):
         if not left:
             return True, ""
         # まだ残っている = Enter が届いていない。もう一度送る
-        subprocess.run(["tmux", "send-keys", "-t", f"{TMUX_SESSION}:{window}", "Enter"], timeout=5)
+        tmux("send-keys", "-t", f"{TMUX_SESSION}:{window}", "Enter", timeout=5)
     time.sleep(SEND_CONFIRM_WAITS[-1])
     left = input_box_draft(_pane_raw(window))
     return (not left), left
@@ -393,10 +537,10 @@ def send(window: str, text: str, enter: bool = True, by: str = ""):
         return {"ok": False, "error": "ほかの送信中で順番が来ませんでした"}
     delivered, left, tries = True, "", 0
     try:
-        subprocess.run(["tmux", "send-keys", "-t", f"{TMUX_SESSION}:{window}", "-l", text], timeout=5)
+        tmux("send-keys", "-t", f"{TMUX_SESSION}:{window}", "-l", text, timeout=5)
         if enter:
             time.sleep(0.15)
-            subprocess.run(["tmux", "send-keys", "-t", f"{TMUX_SESSION}:{window}", "Enter"], timeout=5)
+            tmux("send-keys", "-t", f"{TMUX_SESSION}:{window}", "Enter", timeout=5)
             # 配達確認。入力欄が空になるまで Enter を送り直す(ロックは握ったまま)
             delivered, left = _confirm_delivered(window)
             tries = len(SEND_CONFIRM_WAITS)
@@ -438,7 +582,7 @@ def send_draft(window: str, by: str = ""):
     except _SendLockTimeout:
         return {"ok": False, "error": "ほかの送信中で順番が来ませんでした"}
     try:
-        subprocess.run(["tmux", "send-keys", "-t", f"{TMUX_SESSION}:{window}", "Enter"], timeout=5)
+        tmux("send-keys", "-t", f"{TMUX_SESSION}:{window}", "Enter", timeout=5)
         delivered, left = _confirm_delivered(window)
     finally:
         fcntl.flock(fd, fcntl.LOCK_UN)
@@ -470,7 +614,7 @@ def clear_draft(window: str, by: str = ""):
     cleared = False
     try:
         for wait in (0.4, 0.8):
-            subprocess.run(["tmux", "send-keys", "-t", f"{TMUX_SESSION}:{window}", "C-u"], timeout=5)
+            tmux("send-keys", "-t", f"{TMUX_SESSION}:{window}", "C-u", timeout=5)
             time.sleep(wait)
             if not input_box_draft(_pane_raw(window)):
                 cleared = True
@@ -508,11 +652,37 @@ def send_key(window: str, key: str):
     except _SendLockTimeout:
         return {"ok": False, "error": "ほかの送信中で順番が来ませんでした"}
     try:
-        subprocess.run(["tmux", "send-keys", "-t", f"{TMUX_SESSION}:{window}", key], timeout=5)
+        tmux("send-keys", "-t", f"{TMUX_SESSION}:{window}", key, timeout=5)
     finally:
         fcntl.flock(fd, fcntl.LOCK_UN)
         os.close(fd)
     log_action("key", window=window, key=key)
+    return {"ok": True}
+
+
+def answer_choice(window: str, option: int, by: str = ""):
+    """AskUserQuestion のピッカー(単問・複数問どちらも)で、いま出ている選択肢を1つ選ぶ。
+    数字キーを1つだけ送る。Enter は送らない・送り直しもしない ── parse_choice() の説明コメントの
+    通り、この「数字1つで即決定して次へ進む」画面に send() の Enter 送り直しを使うと、
+    答えていない次の質問の推奨候補を黙って確定させてしまう事故になるため、専用の経路にしてある。"""
+    if not window_exists(window):
+        return {"ok": False, "error": "no such window"}
+    try:
+        n = int(option)
+    except (TypeError, ValueError):
+        return {"ok": False, "error": "bad option"}
+    if not (1 <= n <= 9):
+        return {"ok": False, "error": "bad option"}
+    try:
+        fd = _acquire_send_lock(window)
+    except _SendLockTimeout:
+        return {"ok": False, "error": "ほかの送信中で順番が来ませんでした"}
+    try:
+        tmux("send-keys", "-t", f"{TMUX_SESSION}:{window}", str(n), timeout=5)
+    finally:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        os.close(fd)
+    log_action("choice", window=window, by=by, option=n)
     return {"ok": True}
 
 
@@ -575,7 +745,7 @@ def new_session(name: str, preset: str = ""):
         slug = "s" + datetime.datetime.now(LOCAL).strftime("%H%M%S")   # 数字だけだとウィンドウ番号と衝突する
     if window_exists(slug):
         return {"ok": False, "error": f"window '{slug}' exists"}
-    subprocess.run(["tmux", "new-window", "-d", "-t", f"{TMUX_SESSION}:", "-n", slug, "-c", C.HOME, *pane_env(), claude_cmd(name)], timeout=5)
+    tmux("new-window", "-d", "-t", f"{TMUX_SESSION}:", "-n", slug, "-c", C.HOME, *pane_env(), claude_cmd(name), timeout=5)
     reg = load_registry()
     reg[slug] = {"name": name, "last_seen": datetime.datetime.now(LOCAL).isoformat(timespec="seconds")}
     save_registry(reg)
@@ -600,7 +770,7 @@ def restart_session(window: str, force: bool = False):
             send_when_idle(window, info.get("brief", ""))
             return {"ok": True, "name": info.get("name", window), "cleared": True}
     name = info.get("name", window)
-    subprocess.run(["tmux", "respawn-pane", "-k", "-t", f"{TMUX_SESSION}:{window}", "-c", C.HOME, *pane_env(), claude_cmd(name)], timeout=5)
+    tmux("respawn-pane", "-k", "-t", f"{TMUX_SESSION}:{window}", "-c", C.HOME, *pane_env(), claude_cmd(name), timeout=5)
     log_action("restart", window=window, name=name)
     return {"ok": True, "name": name}
 
@@ -615,8 +785,8 @@ def ensure_session(window: str, name: str, preset_key: str, max_wait_s: int = 90
     send_when_idle)を直接使って同じ手順を踏む。"""
     if window_exists(window):
         return {"ok": True, "window": window}
-    subprocess.run(["tmux", "new-window", "-d", "-t", f"{TMUX_SESSION}:", "-n", window,
-                     "-c", C.HOME, *pane_env(), claude_cmd(name)], timeout=5)
+    tmux("new-window", "-d", "-t", f"{TMUX_SESSION}:", "-n", window,
+                     "-c", C.HOME, *pane_env(), claude_cmd(name), timeout=5)
     reg = load_registry()
     reg[window] = {**reg.get(window, {}), "name": name, "last_seen": datetime.datetime.now(LOCAL).isoformat(timespec="seconds")}
     save_registry(reg)
@@ -693,7 +863,7 @@ def ask(window: str, text: str, timeout: int = 55, by: str = ""):
     reply = ""
     while time.time() < deadline:
         time.sleep(2)
-        pane = sh(f"tmux capture-pane -p -e -J -t {TMUX_SESSION}:{window} -S -{FULL_LINES}")
+        pane = shtmux(f"capture-pane -p -e -J -t {TMUX_SESSION}:{window} -S -{FULL_LINES}")
         r = extract_reply(pane, text)
         if r:
             reply = r
@@ -719,7 +889,7 @@ def auto_dismiss(sess):
     """満足度アンケート(任意)は自動で閉じる。要対応の通知にも乗せない"""
     for s in sess:
         if s["state"] == "choice" and SURVEY.search(s.get("question") or ""):
-            subprocess.run(["tmux", "send-keys", "-t", f"{TMUX_SESSION}:{s['window']}", "0"], timeout=5)
+            tmux("send-keys", "-t", f"{TMUX_SESSION}:{s['window']}", "0")
             log_action("dismiss-survey", window=s["window"])
             s["state"] = "idle"; s["question"] = ""
 
@@ -783,7 +953,7 @@ def write_digest(day: str):
     except OSError:
         pass
     for s in sessions():
-        raw = ANSI.sub("", sh(f"tmux capture-pane -p -J -t {TMUX_SESSION}:{s['window']} -S -{FULL_LINES}"))
+        raw = ANSI.sub("", shtmux(f"capture-pane -p -J -t {TMUX_SESSION}:{s['window']} -S -{FULL_LINES}"))
         lines = last_output(raw, DIGEST_LINES)
         # 連続する重複行を潰す
         dedup = [l for i, l in enumerate(lines) if i == 0 or l != lines[i-1]]
@@ -858,16 +1028,16 @@ PANE_W, PANE_H = 100, 120   # 誰も接続していない間の描画サイズ�
 
 def ensure_window_size():
     """クライアント未接続なら全ウィンドウを PANE_W x PANE_H に。接続中は触らない(端末サイズ優先)"""
-    if sh(f"tmux list-clients -t {TMUX_SESSION}").strip():
+    if shtmux(f"list-clients -t {TMUX_SESSION}").strip():
         return False
     changed = False
-    for line in sh(f"tmux list-windows -t {TMUX_SESSION} -F '#{{window_id}} #{{window_width}} #{{window_height}}'").splitlines():
+    for line in shtmux(f"list-windows -t {TMUX_SESSION} -F '#{{window_id}} #{{window_width}} #{{window_height}}'").splitlines():
         try:
             wid, w, h = line.split()
         except ValueError:
             continue
         if int(w) != PANE_W or int(h) != PANE_H:
-            subprocess.run(["tmux", "resize-window", "-t", wid, "-x", str(PANE_W), "-y", str(PANE_H)], timeout=5)
+            tmux("resize-window", "-t", wid, "-x", str(PANE_W), "-y", str(PANE_H), timeout=5)
             changed = True
     return changed
 
@@ -882,7 +1052,7 @@ def read_log(day: str):
 
 def past_sessions():
     """名簿にあって今は無いスレ(立て直し候補)"""
-    present = set(sh(f"tmux list-windows -t {TMUX_SESSION} -F '#{{window_name}}'").split())
+    present = set(shtmux(f"list-windows -t {TMUX_SESSION} -F '#{{window_name}}'").split())
     return [{"window": w, "name": i.get("name", w), "last_seen": i.get("last_seen", ""), "auto": i.get("auto", True),
              "has_brief": bool(i.get("brief"))}
             for w, i in load_registry().items() if w not in present and i.get("name")]
@@ -896,7 +1066,7 @@ def relaunch_session(window: str):
         return {"ok": False, "error": "not in registry"}
     if window_exists(window):
         return {"ok": False, "error": "already exists"}
-    subprocess.run(["tmux", "new-window", "-d", "-t", f"{TMUX_SESSION}:", "-n", window, "-c", C.HOME, *pane_env(), claude_cmd(info["name"])], timeout=5)
+    tmux("new-window", "-d", "-t", f"{TMUX_SESSION}:", "-n", window, "-c", C.HOME, *pane_env(), claude_cmd(info["name"]), timeout=5)
     info["auto"] = True
     info["last_seen"] = datetime.datetime.now(LOCAL).isoformat(timespec="seconds")
     save_registry(reg)
@@ -908,14 +1078,14 @@ def relaunch_session(window: str):
 def restore_sessions():
     """名簿にあって tmux に無いウィンドウを立て直す(rc は start-claude.sh の担当なので除外)。
     tmux セッション自体が無いうちは何もしない(start-claude.sh がまだ走っていない)。"""
-    if subprocess.run(["tmux", "has-session", "-t", TMUX_SESSION], capture_output=True).returncode != 0:
+    if tmux("has-session", "-t", TMUX_SESSION, capture_output=True).returncode != 0:
         return []
-    present = set(sh(f"tmux list-windows -t {TMUX_SESSION} -F '#{{window_name}}'").split())
+    present = set(shtmux(f"list-windows -t {TMUX_SESSION} -F '#{{window_name}}'").split())
     restored = []
     for win, info in load_registry().items():
         if win == "rc" or win in present or not info.get("name") or info.get("auto") is False:
             continue
-        subprocess.run(["tmux", "new-window", "-d", "-t", f"{TMUX_SESSION}:", "-n", win, "-c", C.HOME, *pane_env(), claude_cmd(info["name"])], timeout=5)
+        tmux("new-window", "-d", "-t", f"{TMUX_SESSION}:", "-n", win, "-c", C.HOME, *pane_env(), claude_cmd(info["name"]), timeout=5)
         log_action("restore", window=win, name=info["name"])
         send_when_idle(win, info.get("brief", ""))
         restored.append(win)
@@ -930,7 +1100,7 @@ def forget_session(window: str):
         reg[window]["auto"] = False
         save_registry(reg)
     if window_exists(window) and not any(s["pid"] for s in sessions() if s["window"] == window):
-        subprocess.run(["tmux", "kill-window", "-t", f"{TMUX_SESSION}:{window}"], timeout=5)
+        tmux("kill-window", "-t", f"{TMUX_SESSION}:{window}", timeout=5)
     log_action("forget", window=window)
     return {"ok": True}
 
@@ -946,7 +1116,7 @@ def stop_session(window: str, by: str = ""):
         save_registry(reg)   # ここが先。kill-window より前に auto=False を書き終える
     killed = False
     if window_exists(window):
-        subprocess.run(["tmux", "kill-window", "-t", f"{TMUX_SESSION}:{window}"], timeout=5)
+        tmux("kill-window", "-t", f"{TMUX_SESSION}:{window}", timeout=5)
         killed = True
     # by = 誰が止めたか(2026-09-22)。記録が無いと、後から「誰がこのスレを落としたか」を
     # 追えない。実際にあるスレが止まった回で、司令室からの操作か別の経路かを切り分けられず、

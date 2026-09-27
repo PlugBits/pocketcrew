@@ -7,6 +7,8 @@
 POST /api/send {window,text,enter}  tmux send-keys(v1)
 POST /api/ask {text,window?,timeout?} → {reply}  Siri ショートカット用(送って待って返す)
 POST /api/key {window,key} / /api/new {name} / /api/restart {window}  (v2)
+POST /api/choice {window,option}  AskUserQuestion のピッカーで選択肢を1つ選ぶ(数字キー1つだけ。
+Enter は送らない。理由は core/collect.py の parse_choice() のコメント参照。2026-09-27)
 /api/file?p= /api/img?p=  ~/vault の読み取り(閲覧のみ。note・numbers 等の他 room も直接叩く汎用経路)。
 ディレクトリ一覧(旧 /api/ls)は vault UI 専用だったので rooms/vault/api.py へ移した(GET /api/ls のまま動く)。
 POST /api/inquiry {kind,text,...} → {job} を即返す非同期ジョブ(sync:trueで同期)。room 共有の裸パス
@@ -390,6 +392,12 @@ class H(BaseHTTPRequestHandler):
             res = collect.send(str(body.get("window", "")), str(body.get("text", "")), bool(body.get("enter", True)), by=by)
         elif u.path == "/api/key":
             res = collect.send_key(str(body.get("window", "")), str(body.get("key", "")))
+        elif u.path == "/api/choice":
+            # AskUserQuestion のピッカーで選択肢を1つ選ぶ。数字キー1つだけを送る専用の経路
+            # (/api/send を使わない理由は core/collect.py の parse_choice() のコメント参照:
+            # 複数質問の画面で、答えていない次の質問が黙って既定値のまま提出される事故になるため)
+            by = (str(body.get("by", "")).strip() or "司令室")[:40]
+            res = collect.answer_choice(str(body.get("window", "")), body.get("option"), by=by)
         elif u.path == "/api/new":
             res = collect.new_session(str(body.get("name", "")), str(body.get("preset", "")))
         elif u.path == "/api/relaunch":

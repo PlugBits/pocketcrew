@@ -19,6 +19,7 @@ push_subject = "https://example.com"   # Web Push の連絡先 URL(自分のサ�
 
 [tmux]
 session = "claude"         # スレ(Claude)を並べる tmux セッション名
+socket = ""                # -L に渡すソケット名。空なら既定のソケット。検証用に隔離したいときだけ設定する
 
 [features]
 jobs = true                # 定時ジョブ
