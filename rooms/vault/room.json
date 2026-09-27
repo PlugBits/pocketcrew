@@ -1,0 +1,3 @@
+{"name": "vault", "icon": "📁", "order": 30,
+ "menu": [{"label": "📁 vault", "act": "vault", "order": 30}],
+ "home": ["home.css", "home.js"]}

@@ -1,0 +1,1295 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#070a14">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="/icon-192.png">
+<title>ポケクル</title>
+<style>
+  /* ゼロから作り直し(2026-09-22 v2)。env(safe-area-inset-*) を直接書いてよいのはここの2行だけ。
+     他は必ず var(--sat)/var(--sab) を使うこと(検証ツールがこの2行にだけ実機相当の値を流し込む) */
+  :root{
+    --sat: env(safe-area-inset-top, 0px);
+    --sab: env(safe-area-inset-bottom, 0px);
+    --kb: 0px;
+    --bg:#070a14;--fg:#e8ecf5;--sub:#a9b3cc;--dim:#8892b0;--card:#0e1326;--line:#1b2340;--ok:#5fe0b0;--busy:#ffd166;--warn:#ff6b7a;--dead:#556;--acc:#5aa0ff;--c-note:#3987e5;--c-x:#d95926;
+    --fs-body:16px;--fs-sub:13px;--fs-small:12px;--fs-title:18px;--fs-h1:22px;--lh:1.6;
+    --font-ui:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Noto Sans JP',sans-serif;--font-mono:Menlo,'SF Mono',ui-monospace,monospace;
+    --compose-h:120px;--tcompose-h:120px;
+  }
+  html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--fg);font-family:var(--font-ui);font-size:var(--fs-body);line-height:var(--lh);-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent}
+  /* 画面は2つだけ(ホーム/スレ)。この2枚だけが position:fixed;inset:0 を持つ土台 */
+  .screen{position:fixed;inset:0;display:none;flex-direction:column;background:var(--bg)}
+  .screen.on{display:flex}
+  .hdr{flex:none;box-sizing:border-box;padding-top:var(--sat);background:#070a14;border-bottom:1px solid var(--line);z-index:2}
+  .hdr-row{display:flex;align-items:center;gap:6px;min-height:46px;padding:0 10px;box-sizing:border-box}
+  .hdr .icon{background:transparent;border:0;color:var(--fg);font-size:19px;padding:6px 8px;min-height:40px;min-width:36px;line-height:1;flex:none;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box}
+  .hdr .icon svg{display:block}
+  .hdr-icons{display:flex;align-items:center;gap:2px;flex:none}
+  .hdr .ttl{font-weight:600;font-size:var(--fs-sub);letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  .hdr .ttl b{color:#9ec1ff}
+  .hdr .sp{flex:1;min-width:0}
+  .hdr .t-name{font-weight:600;font-size:var(--fs-body);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:36vw;flex:none}
+  .hdr .t-state{font-size:var(--fs-sub);color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .scroll{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;box-sizing:border-box}
+  #pulse{position:relative;height:280px;box-sizing:border-box;background:#070c18;flex:none}
+  #c{display:block;width:100%;height:100%;pointer-events:none}
+  #err{position:fixed;left:12px;right:12px;top:calc(var(--hdr-h, 46px) + 6px);font-size:var(--fs-sub);color:var(--warn);opacity:0;z-index:6;background:rgba(7,10,20,.85);padding:4px 8px;border-radius:8px;white-space:pre-wrap;pointer-events:none}
+  #cards{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
+  .card{background:transparent;border:0;border-radius:0;padding:0;min-width:0;overflow:visible}
+  .card.approval,.card.trust,.card.choice,.card.login{background:#120d18}
+  .card.dead{opacity:.8}
+  .st{font-weight:600}
+  .idle .st{color:var(--ok)} .working .st{color:var(--busy)} .approval .st,.trust .st,.choice .st,.login .st{color:var(--warn)}
+  #tQuestion{flex:none;margin:0;padding:10px 16px;font-size:var(--fs-sub);line-height:var(--lh);background:#160d1a;border-bottom:1px solid #3a2340;box-sizing:border-box}
+  #tQuestion pre{font-family:var(--font-mono);color:var(--warn);white-space:pre-wrap;margin:0 0 6px;max-height:22vh;overflow:auto}
+  #tQuestion .hint{color:var(--sub)}
+  #tQuestion[hidden]{display:none}
+  .tail{margin-top:8px;padding:0 16px;font-size:var(--fs-sub);line-height:var(--lh);color:var(--sub);font-family:var(--font-mono);white-space:pre-wrap;word-break:break-word;box-sizing:border-box}
+  .none{color:var(--sub);font-family:var(--font-ui);font-size:var(--fs-sub)}
+  .card.open .tail{max-height:none;color:var(--fg);overflow:visible;padding-bottom:8px}
+  /* Main への送信欄(ホーム専用)。#home の内側に置くだけで、スレ画面ではこの要素ごと非表示になる */
+  #compose{position:fixed;left:0;right:0;bottom:var(--kb);z-index:5;box-sizing:border-box;background:var(--card);border-top:1px solid var(--line);padding:10px 12px calc(10px + max(0px, var(--sab) - var(--kb)))}
+  #compose .to{font-size:var(--fs-sub);color:var(--dim);margin-bottom:6px}
+  #compose .row2,.cardsend .row2{display:flex;gap:8px;align-items:flex-end}
+  #compose textarea,.cardsend textarea{width:auto;box-sizing:border-box;min-height:44px;max-height:30vh}
+  #homeScroll{padding-bottom:calc(var(--compose-h) + var(--sab) + var(--kb) + 14px)}
+  .thread-list{padding:4px 12px 4px;box-sizing:border-box}
+  .th-row{display:flex;align-items:center;gap:10px;min-height:56px;box-sizing:border-box;padding:3px 4px;border-bottom:1px solid var(--line);cursor:pointer}
+  .th-row:last-child{border-bottom:0}
+  .th-dot{width:9px;height:9px;border-radius:50%;flex:none}
+  .th-name{font-weight:600;font-size:var(--fs-body);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:44vw}
+  .th-st{flex:1;min-width:0;font-size:var(--fs-sub);color:var(--dim);text-align:right}
+  /* スレ画面の送信欄(1つだけ)。カードの一部だが position:fixed で常に画面下に貼り付ける */
+  #threadScroll{padding-bottom:calc(var(--tcompose-h) + var(--sab) + var(--kb) + 14px)}
+  .cardsend{position:fixed;left:0;right:0;bottom:var(--kb);z-index:5;background:var(--card);border-top:1px solid var(--line);box-sizing:border-box;padding:10px 12px calc(10px + max(0px, var(--sab) - var(--kb)))}
+  textarea{box-sizing:border-box;flex:1;min-width:0;background:#0b1020;color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:10px;font-size:var(--fs-body);font-family:var(--font-ui);line-height:var(--lh);min-height:44px;max-height:30vh;resize:none;outline:none}
+  button{box-sizing:border-box;background:#1f2f5e;color:#dfe7ff;border:1px solid #2c3f7a;border-radius:10px;padding:10px 14px;font-size:var(--fs-body);font-family:var(--font-ui);min-height:44px}
+  button:disabled{opacity:.4}
+  button.pri{background:#2f6fdb;border-color:#4a86ea;color:#fff}
+  button:active{transform:translateY(1px) scale(.98);filter:brightness(1.15)}
+  .task:active,#summary:active{filter:brightness(1.12)}
+  #confirm{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:flex-end;z-index:9}
+  #confirm.on{display:flex}
+  #confirm .sheet{box-sizing:border-box;background:#0e1326;border-top:1px solid var(--line);border-radius:18px 18px 0 0;padding:16px 16px calc(16px + var(--sab));width:100%}
+  #confirm .to{font-size:var(--fs-sub);color:var(--dim);margin-bottom:8px}
+  #confirm .txt{white-space:pre-wrap;font-size:var(--fs-body);line-height:var(--lh);max-height:40vh;overflow:auto;margin-bottom:12px}
+  #confirm .btns{display:flex;gap:8px;justify-content:flex-end}
+  .chatlog{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;margin-top:8px;padding:0 16px}
+  .chatlog>div{min-width:0}
+  .chatlog .me{font-family:var(--font-ui);font-size:var(--fs-body);line-height:var(--lh);background:#1b2a55;color:#dfe7ff;border-radius:12px;padding:8px 12px 8px 30px;justify-self:end;max-width:88%}
+  .chatlog .re{font-family:var(--font-ui);font-size:var(--fs-body);line-height:var(--lh);color:var(--fg);background:none;border:0;padding:2px 30px 2px 0;max-width:100%}
+  .chatlog .tool{font-family:var(--font-ui);font-size:var(--fs-sub);color:var(--dim);padding:6px 10px;white-space:pre-wrap;word-break:break-word;border-left:2px solid var(--line);border-radius:0 8px 8px 0;background:rgba(255,255,255,.02);cursor:pointer}
+  .chatlog .tool .chev{opacity:.6;font-size:var(--fs-small)}
+  .chatlog .tool.open{color:var(--sub)}
+  .chatlog .tool .full{display:block;margin-top:6px;font-family:var(--font-mono);font-size:var(--fs-sub);line-height:var(--lh);color:var(--sub);white-space:pre-wrap;word-break:break-word}
+  .chatlog .re .tool.sumtag{margin:8px 0 0}
+  .btns{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .btns button{padding:8px 14px;font-size:var(--fs-sub);min-height:44px}
+  .btns button.dim{background:transparent;border-color:var(--line);color:var(--dim)}
+  /* #files(vault ビューア)の見た目は rooms/vault/home.css へ移した(段階: vault を公開サンプルの room にする)。
+     #blobview は他 room(docs 等)も window.tpBlob 経由で使う汎用オーバーレイなので core に残す。 */
+  #blobview{position:fixed;inset:0;background:var(--bg);z-index:30;display:none;flex-direction:column}
+  #blobview.on{display:flex}
+  #blobview .bv-bar{display:flex;gap:8px;align-items:center;padding:calc(10px + var(--sat)) 12px 10px;border-bottom:1px solid var(--line);background:#0e1326;flex:none;box-sizing:border-box}
+  #blobview .bv-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--fs-body);color:var(--fg);font-family:var(--font-ui)}
+  #blobview .bv-bar button{min-height:44px;font-size:var(--fs-body);font-family:var(--font-ui);flex:none}
+  #blobview .bv-body{flex:1;display:flex;align-items:center;justify-content:center;overflow:auto;box-sizing:border-box}
+  #blobview .bv-body iframe,#blobview .bv-body object{width:100%;height:100%;border:0;background:#fff}
+  #blobview .bv-body img{max-width:100%;max-height:100%;object-fit:contain;display:block;margin:auto}
+  /* ブリーフィング編集オーバーレイ(2026-09-24: prompt() は iPhone で1行しか見えず編集できなかったため全画面に)。
+     vault room の #files 同様 .tp-overlay を付けて swipeOverlayOpen() に拾わせる。room 側 CSS には依存しない(vault は任意) */
+  #brief{position:fixed;inset:0;background:#0e1326;z-index:30;display:none;flex-direction:column;box-shadow:0 0 0 100vh #0e1326}   /* 影で下にも塗る: キーボード上の半透明の帯の裏にスレ本文が透けていた(2026-09-24 IMG_5880) */
+  #brief.on{display:flex}
+  #brief .top{display:flex;gap:8px;align-items:center;padding:calc(10px + var(--sat)) 12px 10px;border-bottom:1px solid var(--line);background:#0e1326;flex:none;box-sizing:border-box}
+  #brief .top .ttl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--fs-body);color:var(--fg);font-family:var(--font-ui)}
+  #brief .top button{min-height:44px;font-size:var(--fs-body);font-family:var(--font-ui);flex:none}
+  #brief .hint{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:6px 12px;font-size:var(--fs-sub);color:var(--dim);flex:none;box-sizing:border-box}
+  #brief .hint .cnt{flex:none;white-space:nowrap;font-family:var(--font-mono)}
+  #brief textarea{flex:1;min-height:0;box-sizing:border-box;margin:0 12px calc(12px + var(--sab));background:#0b1020;color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:10px;font-size:var(--fs-body);line-height:var(--lh);font-family:var(--font-ui);white-space:pre-wrap;word-wrap:break-word;overflow-wrap:break-word;overflow-x:hidden;resize:none;outline:none}
+  .attach{display:flex;gap:6px;align-items:center;flex-wrap:wrap;width:100%;font-size:var(--fs-small);color:var(--dim)}
+  .attach:empty{display:none}
+  .attach .chip{position:relative;background:#131a33;border:1px solid var(--line);border-radius:12px;padding:3px 9px;color:var(--fg);max-width:60vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .attach .chip b{color:var(--warn);margin-left:6px;cursor:pointer}
+  .attach .chip .bar{position:absolute;left:0;bottom:0;height:2px;background:var(--acc);width:0%;border-radius:0 0 12px 12px}
+  .attach .chip .pct{color:var(--dim);margin-left:4px}
+  .attach .chip.error{border-color:var(--warn);background:rgba(255,107,122,.14)}
+  .attach .chip .err{color:var(--warn);margin-left:6px}
+  button.clip{padding:8px 10px}
+  input[type=file]{display:none}
+  #cards{margin-top:10px}
+  #cards:empty{display:none}
+  .chatlog table{font-family:var(--font-ui);border-collapse:collapse;font-size:14px;width:100%}
+  .chatlog th,.chatlog td{border:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top;white-space:normal;min-width:80px;line-height:var(--lh)}
+  .chatlog th{color:#9ec1ff;font-weight:600;background:#0b1020}
+  .chatlog .tbl{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:2px 0}
+  #toast{position:fixed;left:12px;right:12px;bottom:calc(80px + var(--sab));z-index:9;display:none;background:rgba(14,19,38,.96);border:1px solid var(--line);border-left:3px solid var(--ok);border-radius:14px;padding:12px 14px;font-size:var(--fs-body);box-shadow:0 8px 24px rgba(0,0,0,.45)}
+  #toast.on{display:block}
+  #toast.need{border-left-color:var(--warn)} #toast.dead{border-left-color:var(--dead)}
+  #toast .t{font-weight:600;margin-bottom:2px} #toast .b{color:var(--sub);font-size:var(--fs-sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .chatlog .me,.chatlog .re,.chatlog .tool,.tail,#tQuestion{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
+  .chatlog .re,.chatlog .me{position:relative}
+  .chatlog .copy{display:block;margin:4px 0 0 auto;font-size:var(--fs-small);opacity:.5;background:transparent;border:0;padding:6px 4px;color:var(--dim)}
+  .chatlog a{color:#7fb0ff;word-break:break-all}
+  /* ⋯ メニュー(ホーム/スレ共通の下シート) */
+  .menu{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:flex-end;z-index:9}
+  .menu.on{display:flex}
+  .menu .sheet{box-sizing:border-box;background:#0e1326;border-top:1px solid var(--line);border-radius:18px 18px 0 0;padding:8px 8px calc(8px + var(--sab));width:100%}
+  .menu button{display:block;width:100%;box-sizing:border-box;text-align:left;background:transparent;border:0;border-top:1px solid var(--line);color:var(--fg);padding:14px 12px;font-size:var(--fs-body);font-family:var(--font-ui);border-radius:0;min-height:48px}
+  .menu button:first-child{border-top:0}
+  .menu button.cancel{color:var(--dim);text-align:center;margin-top:6px;border-top:0;border-radius:10px;background:#131a33}
+  .menu button.warn{color:var(--warn)}
+  #roomWarn{font-size:var(--fs-sub);color:var(--warn);padding:2px 4px 8px}
+</style>
+</head>
+<body>
+
+<!-- ================= 画面1: ホーム ================= -->
+<div id="home" class="screen on">
+  <div class="hdr" id="homeHdr"><div class="hdr-row">
+    <span class="ttl" id="homeTtl"><b>ポケクル</b> · <span id="up">…</span></span><span id="host" hidden></span>
+    <span class="sp"></span>
+    <div class="hdr-icons">
+      <span id="ttsBtn" class="icon" style="cursor:pointer" role="button" tabindex="0"></span>
+      <span id="pushBtn" class="icon" style="cursor:pointer" role="button" tabindex="0" title="通知"></span>
+      <span id="swUpdate" hidden style="cursor:pointer;font-size:var(--fs-small);color:var(--busy);border:1px solid var(--busy);border-radius:8px;padding:3px 7px">更新あり(タップで再読込)</span>
+      <button id="homeMenuBtn" class="icon">⋯</button>
+    </div>
+  </div></div>
+  <div id="homeScroll" class="scroll">
+    <div id="roomWarn" hidden></div>
+    <div id="pulse">
+      <canvas id="c"></canvas>
+      <div id="err">offline</div>
+    </div>
+    <div id="threadList" class="thread-list"></div>
+  </div>
+  <div id="compose"><div class="sheet"><div class="to"><span id="mainState" class="st"></span></div><div class="attach" data-att-for="main"></div><div class="row2"><textarea id="msg" rows="1" placeholder="Main へ"></textarea><button class="clip" data-att="main">📎</button><button id="sendBtn" class="pri" disabled>送信</button></div><input type="file" id="file-main" accept="image/*,.pdf,.md,.txt,.csv,.json" multiple></div></div>
+</div>
+
+<!-- ================= 画面2: スレ ================= -->
+<div id="thread" class="screen">
+  <div class="hdr"><div class="hdr-row">
+    <button id="tBack" class="icon">←</button>
+    <span id="tName" class="t-name"></span>
+    <span id="tState" class="t-state"></span>
+    <span class="sp"></span>
+    <button id="threadMenuBtn" class="icon">⋯</button>
+  </div></div>
+  <div id="tQuestion" hidden></div>
+  <div id="threadScroll" class="scroll">
+    <div id="cards"></div>
+  </div>
+</div>
+
+<!-- ================= ⋯ メニュー(ホーム以外への導線はここに集約) ================= -->
+<div id="homeMenu" class="menu"><div class="sheet">
+  <button data-act="plan">ダッシュボード</button>
+  <button data-act="note">note</button>
+  <button data-act="workout">🏋️ ワークアウト</button>
+  <button data-act="num">📊 数字</button>
+  <button data-act="newthread">+ 新しいスレを立てる</button>
+  <button class="cancel" data-act="close">閉じる</button>
+</div></div>
+<div id="threadMenu" class="menu"><div class="sheet">
+  <button data-act="brief">起動時ブリーフィングを編集</button>
+  <button data-act="restart">再起動</button>
+  <button class="warn" data-act="stop">止める</button>
+</div></div>
+
+<div id="toast"><div class="t"></div><div class="b"></div></div>
+<!-- #files(vault ビューア)の DOM は rooms/vault/home.js が自分で作る(段階: vault を公開サンプルの room にする) -->
+<div id="blobview" class="tp-overlay"><div class="bv-bar" id="bv-bar"><span class="bv-title" id="bv-title"></span><button id="bv-share">共有</button><button id="bv-close">閉じる</button></div><div class="bv-body" id="bv-body"></div></div>
+<!-- 起動時ブリーフィング編集(全画面。prompt() の置き換え。2026-09-24) -->
+<div id="brief" class="tp-overlay">
+  <div class="top"><button id="briefBack">←</button><span class="ttl" id="briefTitle"></span><button id="briefSave" class="pri">保存</button></div>
+  <div class="hint"><span>スレの起動・再起動(/clear)のときに最初に送る文です。空にして保存すると削除。</span><span class="cnt" id="briefCnt">0 / 4000</span></div>
+  <textarea id="briefText" placeholder="起動時ブリーフィング"></textarea>
+</div>
+<div id="confirm"><div class="sheet"><div class="to">宛先: <b id="cTo"></b> · Enterまで送ります</div><div class="txt" id="cTxt"></div><label style="font-size:var(--fs-sub);color:var(--sub);display:block;margin-bottom:10px"><input type="checkbox" id="cSkip"> 次回から確認せずに送る(この端末だけ)</label><div class="btns"><button id="cNo">やめる</button><button id="cYes" class="pri">送信する</button></div></div></div>
+<script>
+window.__tp={frames:0,errors:[]};
+// room 側(home.js)と core を繋ぐ薄い共有点。room はここに登録・参照するだけで、core の内部実装(DOM構造や
+// 変数名)には触れない。詳細は core/rooms.py の docstring(room.json の "home" キー)参照。
+//   TP.linkifiers: [(escapedHtml)=>escapedHtml]  チャット本文の linkify() が esc 済み HTML に順に適用する
+//   TP.menuActions: {act: fn}  ⋯メニュー(#homeMenu)の data-act を core が拾えないとき、ここを見て呼ぶ
+//   TP.openBlob(url,title)  画像/PDF を #blobview オーバーレイで開く(実体は window.tpBlob.open と同じ)
+window.TP={linkifiers:[],menuActions:{}};
+window.addEventListener('error',e=>{__tp.errors.push(String(e.message||e)); const el=document.getElementById('err'); if(el){el.textContent='JSエラー: '+(e.message||e); el.style.opacity=1;}});
+window.addEventListener('unhandledrejection',e=>{__tp.errors.push('promise: '+String(e.reason&&e.reason.message||e.reason));});
+(() => {
+// ヘッダー(#homeHdr)の実測高さを --hdr-h に反映する(#err の位置合わせに使う)
+function syncHeaderHeight(){
+  const el=document.getElementById('homeHdr'); if(!el) return;
+  const h=el.getBoundingClientRect().height;
+  if(h>0) document.documentElement.style.setProperty('--hdr-h',h+'px');
+}
+syncHeaderHeight();
+requestAnimationFrame(syncHeaderHeight);
+addEventListener('resize',syncHeaderHeight);
+if(window.visualViewport) visualViewport.addEventListener('resize',syncHeaderHeight);
+if(document.fonts&&document.fonts.ready) document.fonts.ready.then(syncHeaderHeight).catch(()=>{});
+// ================= データ =================
+const STATE_JA={idle:'待機',working:'作業中',approval:'承認待ち',trust:'信頼確認',choice:'選択待ち',login:'要ログイン',typed:'未送信の入力あり',dead:'停止',unknown:'不明'};
+const target={load:0,cpu:0,mem:10,uptime:0,procs:30}, view={...target};
+let sessions=[], peers=[], lastOk=0, open=new Set(); const speakLock=new Set(); const showAll=new Set();
+// 未送信の文(state==='typed')の 送る/消す ボタンを押した結果メッセージ。window→{hideBox,text}|{note}|{err,left}
+// updateThreadChrome() が毎回の render() で読み、そのまま描く(ポーリング周期をまたいでも消えない)
+const typedMsg={};
+// スレを開いた直後は、開く前の scrollTop(=0 のことが多い)を基準にした「近いから維持」判定を
+// 無視して、必ず最下部まで送る。openThread() が立て、render() が実際にその通り送ったら下ろす
+let pendingScrollBottom=false;
+const cards=document.getElementById('cards');
+const homeScrollEl=document.getElementById('homeScroll'), threadScrollEl=document.getElementById('threadScroll');
+const homeEl=document.getElementById('home'), threadEl=document.getElementById('thread');
+function showScreen(threadOpen){ homeEl.classList.toggle('on',!threadOpen); threadEl.classList.toggle('on',threadOpen); }
+function human(s){const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60);return d?`${d}d ${h}h`:h?`${h}h ${m}m`:`${m}m`;}
+// 2026-09-22: `"` と `'` も変換する。esc() は data-text="${esc(text)}" のように**属性の中**でも
+// 使っているので、`"` を素通りさせると本文の引用符で属性が閉じ、そこから先が HTML として
+// 解釈される。実際、会話に含まれていた `class="attach" id="att-main"` という文字列が本物の
+// 要素になり、id が重複してチップの描画先が狂っていた(実機で確認)。
+// 本文として出す場合も &quot; はブラウザが " と表示するので、全箇所でこの変換が正しい。
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+// 入力欄の自動伸縮(ホーム #msg・スレ .cardsend textarea の共通処理)
+function autoGrow(ta){ta.style.height='auto'; ta.style.height=Math.min(ta.scrollHeight,innerHeight*0.3)+'px';}
+// タスク行の表示用: 本文中の絶対パスをファイル名だけに縮める(中身のtasks.mdは変えない、表示だけ)
+function shortenPaths(s){return s.replace(/(^|\s)(\/(?:home|tmp|mnt|root|Users|var|etc|usr)\/[^\s]+)/g,(m,pre,p)=>{const parts=p.split('/');return pre+parts[parts.length-1];});}
+
+function updateErr(){document.getElementById('err').style.opacity=(Date.now()-lastOk>20000)?1:0;}
+// SSE(またはポーリング)で受け取った1回分の status を反映する(poll() と /api/events で共有)
+async function applyStatus(d){
+  Object.assign(target,{load:d.load[0],cpu:d.cpu_pct,mem:d.mem_pct,uptime:d.uptime_s,procs:d.procs}); if(d.cols) COLS=d.cols;
+  const prev=new Map(sessions.map(s=>[s.window,s]));
+  sessions=d.sessions.map(s=>{const p=prev.get(s.window);return {...s,ang:p?p.ang:Math.random()*Math.PI*2,glow:p?p.glow:0,full:p?p.full:undefined,px:p?p.px:null,py:p?p.py:null};});
+  for(const w of open){try{const j=await (await fetch('/api/pane?w='+encodeURIComponent(w),{cache:'no-store'})).json(); const s=sessions.find(x=>x.window===w); if(s) s.full=j.text;}catch(e){}}
+  peers=d.peers; lastOk=Date.now();
+  document.getElementById('host').textContent=d.host;
+  document.getElementById('up').textContent='up '+human(d.uptime_s);
+  {const rw=document.getElementById('roomWarn'); const warns=d.room_warnings||[];
+    if(rw){ if(warns.length){rw.hidden=false; rw.textContent='⚠ '+warns[0];} else {rw.hidden=true; rw.textContent='';} }}
+  // 作業中→待機 に変わったスレの最後の返答を読み上げる(🔊オンのときだけ)
+  if(tts){for(const s of sessions){const p=prev.get(s.window); if(p&&p.state==='working'&&s.state==='idle'&&!speakLock.has(s.window)){speakLock.add(s.window); setTimeout(()=>speakLock.delete(s.window),30000);
+    fetch('/api/pane?w='+encodeURIComponent(s.window),{cache:'no-store'}).then(r=>r.json()).then(j=>{const txt=lastReply(j.text); if(txt) speak(`${s.name}。${txt}`);}).catch(()=>{});}}}
+  // 状態遷移をページ内トーストで通知(前面にいるとき用。通知バナーの代わり)
+  {const now=Date.now(); for(const s of sessions){const p=prev.get(s.window); if(!p) continue; const key=s.window;
+    if(p.state!==s.state){
+      if(['approval','trust','choice','login'].includes(s.state)) toast('need',`要対応: ${s.name}`,(s.question||'').split('\n')[0]||s.state,key);
+      else if(s.state==='dead') toast('dead',`停止: ${s.name}`,'カードから再起動できます',key);
+      else if(s.state==='idle'&&p.state==='working'&&(now-(p.workingSince||now))>=20000) toast('done',`完了: ${s.name}`,(s.tail||[]).slice(-1)[0]||'',key);
+    }
+    s.workingSince=(s.state==='working')?(p.state==='working'?(p.workingSince||now):now):undefined;}}
+  lastData=d; render(d);
+  if(location.hash.startsWith('#t=')&&!applyStatus.opened){applyStatus.opened=true; fetch('/api/clientlog',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({src:'page',ev:'hash-open',hash:location.hash})}).catch(()=>{}); openThread(decodeURIComponent(location.hash.slice(3)));
+    setTimeout(()=>{fetch('/api/clientlog',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({src:'page',ev:'after-open',hash:location.hash,open:[...open].join(','),threadOpen:threadEl.classList.contains('on'),cards:cards.children.length,scrollTop:threadScrollEl.scrollTop,scrollH:threadScrollEl.scrollHeight,sessions:sessions.length,vis:document.visibilityState})}).catch(()=>{});},1500);}
+  updateErr();
+}
+async function poll(){
+  try{
+    const r=await fetch('/api/status',{cache:'no-store'}); const d=await r.json();
+    await applyStatus(d);
+  }catch(e){}
+  updateErr();
+}
+const NEEDS=['approval','trust','choice','login','dead','typed'];
+// スレ一覧(司令室の入口)。惑星の下に、畳まず全件並べる。直近に動いた順
+// 色は惑星の描画(下の frameBody 内)にある stCol と同じ値をそのまま複製(新しい色は決めない)
+const THREAD_STATE_JA={working:'作業中',idle:'待機',approval:'承認待ち',trust:'承認待ち',choice:'承認待ち',login:'承認待ち',typed:'未送信あり',dead:'停止'};
+const THREAD_STCOL={idle:'150 80% 70%',working:'45 100% 70%',approval:'350 100% 70%',trust:'350 100% 70%',choice:'350 100% 70%',login:'350 100% 70%',typed:'215 100% 80%',dead:'230 10% 45%',unknown:'230 10% 60%'};
+const threadListEl=document.getElementById('threadList');
+function renderThreadList(){
+  if(!threadListEl) return;
+  const sorted=sessions.slice().sort((a,b)=>a.last_activity_s-b.last_activity_s);
+  threadListEl.innerHTML=sorted.map(s=>`<div class="th-row" data-w="${s.window}"><span class="th-dot" style="background:hsl(${THREAD_STCOL[s.state]||THREAD_STCOL.unknown})"></span><span class="th-name">${esc(s.name)}</span><span class="th-st">${THREAD_STATE_JA[s.state]||'不明'}</span></div>`).join('');
+}
+function stopConfirmText(s){
+  if(s.window==='rc'||s.name==='rc') return 'rc を閉じます。復帰対象からも外します。ただし rc は次にログオンしたときに start-claude.sh が立て直します。';
+  if(s.window==='main'||s.name==='Main') return 'Main を閉じます。指示の出し先が無くなります。本当に止めますか?';
+  return 'このスレを閉じます。復帰対象からも外します。';
+}
+async function stopThread(w,name){
+  const s=sessions.find(x=>x.window===w)||{window:w,name:name};
+  if(!confirm(stopConfirmText(s))) return;
+  if(s.window==='main'||s.name==='Main'){
+    const typed=prompt('本当に止めるなら、スレ名(Main)を入力してください');
+    if(typed!=='Main') return;
+  }
+  await api('/api/stop',{window:w});
+  setTimeout(poll,1000);
+}
+threadListEl&&threadListEl.addEventListener('click',e=>{
+  const row=e.target.closest('.th-row'); if(row){openThread(row.dataset.w); return;}
+});
+// 現在開いているスレ(常に0か1件)のヘッダー(← 名前 状態 ⋯)と、承認待ちの質問バナーを更新する
+function updateThreadChrome(s){
+  const nameEl=document.getElementById('tName'), stEl=document.getElementById('tState'), qEl=document.getElementById('tQuestion');
+  if(!s){ if(nameEl) nameEl.textContent=''; if(stEl) stEl.textContent=''; if(qEl) qEl.hidden=true; return; }
+  nameEl.textContent=s.name; stEl.textContent=STATE_JA[s.state]||s.state;
+  threadMenuTarget=s.window; threadMenuName=s.name;
+  const tm=typedMsg[s.window];
+  if(tm&&tm.hideBox){
+    // 送る/消すが成功した直後。次の poll で state が変わるのを待たず、枠(質問文+ボタン)はその場で消し、
+    // 結果だけを 1.5秒ほど出す(呼び出し側の setTimeout が消す)
+    qEl.hidden=false;
+    qEl.innerHTML=`<div class="hint" style="color:var(--dim)">${esc(tm.text)}</div>`;
+  } else if(['approval','trust','choice','login'].includes(s.state)&&s.question){
+    qEl.hidden=false;
+    qEl.innerHTML=`<pre>${esc(s.question)}</pre><div class="hint">番号を入力欄に打って送ってください</div>`;
+  } else if(s.state==='typed'&&s.question){
+    qEl.hidden=false;
+    let extra='';
+    if(tm&&tm.err){
+      extra=`<div class="hint" style="color:var(--warn);margin-top:8px">${esc(tm.err)}${tm.left?`<br>残っている文: ${esc(tm.left)}`:''}</div>`;
+    } else if(tm&&tm.note!==undefined){
+      extra=`<div class="hint" style="margin-top:8px">${esc(tm.note)}</div>`;
+    }
+    qEl.innerHTML=`<div class="hint">送られていない文が残っています</div><pre>${esc(s.question)}</pre><div class="btns"><button class="pri" data-typed-act="send" data-w="${s.window}">送る</button><button class="dim" data-typed-act="clear" data-w="${s.window}">消す</button></div>${extra}`;
+  } else { delete typedMsg[s.window]; qEl.hidden=true; }
+}
+function syncTcomposeHeight(){
+  try{const ce=cards.querySelector('.cardsend'); document.documentElement.style.setProperty('--tcompose-h',(ce?ce.getBoundingClientRect().height:120)+'px');}catch(e){}
+}
+function render(d){
+  renderThreadList();   // 惑星の下のスレ一覧、直近に動いた順
+  updateSendEnabled();
+  {const mst=document.getElementById('mainState'); if(mst) mst.textContent=mainWin()?'':'(Main が動いていません)';}
+  const ae=document.activeElement; if(ae&&ae.tagName==='TEXTAREA'&&cards.contains(ae)){return;}
+  const drafts={}; cards.querySelectorAll('textarea[data-w]').forEach(x=>{if(x.value)drafts[x.dataset.w]=x.value;});
+  const box=threadScrollEl; const sc=open.size?{top:box.scrollTop,bottom:box.scrollHeight-box.scrollTop-box.clientHeight}:null;
+  const sig=JSON.stringify(sessions.map(s=>[s.window,s.state,s.question,JSON.stringify(s.agents||[]),s.full||s.tail.join('\n'),open.has(s.window),s.last_activity_s>3600?'h':s.last_activity_s>60?'m':'s']));
+  if(sig===render.lastSig){ updateThreadChrome(sessions.find(s=>open.has(s.window))); return; } render.lastSig=sig;
+  const o=sessions.filter(s=>open.has(s.window));
+  // tail(チャットログ)の既存 DOM は退避しておき、カードの骨組みを作り直した後に戻す(ブロック差分更新のため)
+  const savedTails={}; cards.querySelectorAll('.tail[data-w]').forEach(t=>{savedTails[t.dataset.w]=t;});
+  cards.innerHTML=o.map(s=>`
+    <div class="card ${s.state} open" data-w="${s.window}">
+      ${(s.agents||[]).length?`<div class="btns" style="margin:8px 12px 0;padding:0 4px;box-sizing:border-box">${s.agents.map(a=>`<span class="chip" style="background:#131a33;border:1px solid var(--line);border-radius:12px;padding:4px 9px;font-size:var(--fs-small)">🛰 ${esc(a.desc||a.kind)}${a.elapsed?` <span style="color:var(--dim)">${esc(a.elapsed)}</span>`:''}</span>`).join('')}</div>`:''}
+      <div class="tail" data-w="${s.window}"></div>
+      <div class="cardsend"><div class="attach" data-att-for="${s.window}"></div><div class="row2">${s.pid?`<textarea rows="1" data-w="${s.window}" placeholder="${esc(s.name)} に送る"></textarea><button class="clip" data-att="${s.window}">📎</button><button class="pri csend" data-w="${s.window}">送信</button>`:`<span class="none sp">停止中のスレです</span>`}</div></div>
+    </div>`).join('');
+  o.forEach(s=>{
+    const placeholder=cards.querySelector(`.tail[data-w="${s.window}"]`);
+    const saved=savedTails[s.window];
+    let tailEl=placeholder;
+    if(saved&&saved!==placeholder){placeholder.replaceWith(saved); tailEl=saved;}
+    renderTail(tailEl,s);
+  });
+  showScreen(o.length>0);
+  updateThreadChrome(o[0]);
+  syncTcomposeHeight();
+  for(const w in drafts){const x=cards.querySelector(`textarea[data-w="${w}"]`); if(x) x.value=drafts[w];}
+  for(const k in attachments){renderAtt(k);}
+  o.forEach(s=>updateCardSendEnabled(s.window));
+  if(pendingScrollBottom&&box){box.scrollTop=box.scrollHeight;}
+  else if(sc&&box){box.scrollTop=sc.bottom<40?box.scrollHeight:sc.top;}
+}
+async function openThread(w){open.clear(); open.add(w); pendingScrollBottom=true;
+  render.lastSig=null; render(lastData);   // pane取得を待たず、先にヘッダー・骨組みを描画(まだ短いので最下部へ)
+  try{const r=await fetch('/api/pane?w='+encodeURIComponent(w),{cache:'no-store'}); const j=await r.json(); const s=sessions.find(x=>x.window===w); if(s) s.full=j.text;}catch(e){}
+  pendingScrollBottom=true;   // 実データが届いて本文が伸びた後も、もう一度最下部を保証する
+  render.lastSig=null; render(lastData);
+  pendingScrollBottom=false;
+  // 添付チップ等の遅れて確定するレイアウトぶんを、次フレームでもう一度だけ追従させる
+  requestAnimationFrame(()=>{threadScrollEl.scrollTop=threadScrollEl.scrollHeight;});
+}
+function closeThread(){open.forEach(w=>showAll.delete(w)); open.clear(); render.lastSig=null; render(lastData); threadScrollEl.scrollTo({top:0}); if(window.tpEnsureAnimating) window.tpEnsureAnimating();}
+document.getElementById('tBack').addEventListener('click',closeThread);
+cards.addEventListener('click',async e=>{const cp=e.target.closest('button.copy'); if(cp){e.stopPropagation(); const el=cp.closest('.me,.re'); const text=el.dataset.text||el.textContent.replace(/⧉|▶︎/g,'').trim();
+    try{await navigator.clipboard.writeText(text); cp.textContent='✓'; setTimeout(()=>cp.textContent='⧉',1200);}catch(_){ const r=document.createRange(); r.selectNodeContents(el); const sel=getSelection(); sel.removeAllRanges(); sel.addRange(r); alert('選択したのでコピーしてください'); } return;}
+  if(e.target.closest('a[href]')) return;
+  const mb=e.target.closest('button.more'); if(mb){e.stopPropagation(); showAll.add(mb.dataset.w); const y=threadScrollEl.scrollHeight-threadScrollEl.scrollTop; render.lastSig=null; render(lastData); threadScrollEl.scrollTop=threadScrollEl.scrollHeight-y; return;}
+});
+async function pollDaily(){return; try{const j=await (await fetch('/api/daily',{cache:'no-store'})).json();
+  document.getElementById('dailyDate').textContent=j.date+(j.state.done?' · 依頼済み':'');
+  const b=document.getElementById('dailyBody'); if(j.exists){b.className='body';b.textContent=j.text.replace(/^---[\s\S]*?---\n/,'');}else{b.className='none';b.textContent=j.state.done?'Main が書いています…':'まだ書かれていません(23:00 に自動、または「今すぐ書く」)';}}catch(e){}}
+const toastEl=document.getElementById('toast'); let toastTimer=null;
+function toast(kind,title,body,win){ if(open.has(win)) return; toastEl.className='on '+kind; toastEl.querySelector('.t').textContent=title; toastEl.querySelector('.b').textContent=body||''; toastEl.dataset.w=win; clearTimeout(toastTimer); toastTimer=setTimeout(()=>{toastEl.className='';},8000); }
+toastEl.addEventListener('click',()=>{const w=toastEl.dataset.w; toastEl.className=''; if(w) openThread(w);});
+const pulseEl=document.getElementById('pulse');
+let coreR=0;
+// 惑星は眺める専用。キャンバスは pointer-events:none にしてあるのでタップしても何も起きない
+// (縮める機能は2026-09-22の作り直しで廃止。280px 固定で常に全体を出す)
+let timer=null, es=null;
+function startFallback(){if(timer)return; timer=setInterval(()=>{poll(); if(Date.now()%30000<5000)pollDaily();},5000);}
+function startPolling(){
+  if(timer||es)return; poll(); pollDaily();
+  if('EventSource' in window){
+    try{
+      es=new EventSource('/api/events');
+      es.addEventListener('status',e=>{try{applyStatus(JSON.parse(e.data));}catch(err){}});
+      es.onerror=()=>{if(es){es.close();es=null;} startFallback();};
+    }catch(e){startFallback();}
+  } else startFallback();
+}
+function stopPolling(){if(es){es.close();es=null;} if(timer){clearInterval(timer);timer=null;}}
+document.addEventListener('visibilitychange',()=>document.hidden?stopPolling():startPolling());
+startPolling();
+// iOS: ソフトキーボードが出ると固定バーが隠れるので visualViewport に合わせて持ち上げる
+function fitBar(){const vv=window.visualViewport; if(!vv) return; const off=Math.max(0, innerHeight - vv.height - vv.offsetTop); document.querySelectorAll('#confirm .sheet').forEach(el=>el.style.marginBottom=off+'px');}
+if(window.visualViewport){visualViewport.addEventListener('resize',fitBar);visualViewport.addEventListener('scroll',fitBar);}
+// カード内の入力欄にフォーカスしたら、その欄が見える位置までスクロール
+cards.addEventListener('input',e=>{const ta=e.target; if(ta.tagName==='TEXTAREA'){autoGrow(ta); syncTcomposeHeight(); updateCardSendEnabled(ta.dataset.w);}});
+cards.addEventListener('focusin',e=>{if(e.target.tagName==='TEXTAREA')setTimeout(()=>e.target.scrollIntoView({block:'center',behavior:'smooth'}),300);});
+
+async function api(path,body){const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const j=await r.json();if(!j.ok)alert('失敗: '+j.error);return j;}
+document.getElementById('tQuestion').addEventListener('click',async e=>{
+  const b=e.target.closest('button[data-typed-act]'); if(!b) return;
+  const w=b.dataset.w, act=b.dataset.typedAct;
+  if(act==='clear'&&!confirm('入力欄に残っている文を消します。送られません。')) return;
+  // /api/key ではなく、配達確認つきの専用APIを使う。api() ヘルパーは失敗時に alert() を出すので
+  // ここでは使わず、戻り値をそのまま画面(#tQuestion)に出す
+  b.disabled=true;
+  let j;
+  try{
+    const r=await fetch(act==='send'?'/api/draft/send':'/api/draft/clear',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({window:w})});
+    j=await r.json();
+  }catch(err){ j={ok:false,error:'通信に失敗しました'}; }
+  if(j.ok&&(j.sent||j.cleared)){
+    typedMsg[w]={hideBox:true,text:j.sent?'送りました':'消しました'};
+    render(lastData);
+    setTimeout(()=>{ if(typedMsg[w]&&typedMsg[w].hideBox){ delete typedMsg[w]; const q=document.getElementById('tQuestion'); if(q) q.hidden=true; } },1500);
+  } else if(j.ok){
+    typedMsg[w]={note:j.note||''};
+    render(lastData);
+  } else {
+    typedMsg[w]={err:j.error||'失敗しました',left:j.left};
+    render(lastData);
+  }
+  poll();
+});
+cards.addEventListener('click',async e=>{
+  const tl=e.target.closest('.chatlog .tool'); if(tl){e.stopPropagation(); tl.classList.toggle('open'); const f=tl.querySelector('.full'); if(f) f.hidden=!tl.classList.contains('open'); return;}
+  const sb=e.target.closest('button.csend'); if(sb){e.stopPropagation(); const ta=cards.querySelector(`textarea[data-w="${sb.dataset.w}"]`); const s=sessions.find(x=>x.window===sb.dataset.w);
+    const ca=attachments[s&&s.window]||[]; const cUploading=ca.some(x=>x.status==='uploading'); const cDone=ca.some(x=>x.status==='done');
+    if(!ta||!s||cUploading||(!ta.value.trim()&&!cDone)) return; ta.blur(); const sent=ta.value;
+    // 空にする欄は、その時点で画面にある欄を探し直す(2026-09-24)。確認シートを出している間に render() が
+    // カードを作り直すと、ta は外れた古い欄になり、新しい欄に写された文が送信後も残っていた(IMG_5884)。
+    const curTa=()=>cards.querySelector(`textarea[data-w="${s.window}"]`)||ta;
+    openConfirm(s.window,s.name,withAttachments(s.window,ta.value),()=>{const t=curTa(); t.value='';t.style.height='auto';syncTcomposeHeight();updateCardSendEnabled(s.window);
+      [60,250,600].forEach(ms=>setTimeout(()=>{const t2=curTa(); const v=t2.value.trim(); if(v&&document.activeElement!==t2&&sent.includes(v)){t2.value='';t2.style.height='auto';syncTcomposeHeight();updateCardSendEnabled(s.window);}},ms));}); return;}
+},true);
+async function startNewThread(){
+  const past=(await (await fetch('/api/past',{cache:'no-store'})).json()).past||[];
+  let name='';
+  if(past.length){const pick=prompt(`立て直すなら番号、新しく作るなら名前を入力:\n${past.map((p,i)=>`${i+1}. ${p.name}(${p.window})${p.auto?' ※再起動時に自動復帰':''}`).join('\n')}`); if(pick===null) return;
+    const n=parseInt(pick,10); if(n>=1&&n<=past.length){const j=await api('/api/relaunch',{window:past[n-1].window}); if(j.ok){alert(`${j.name} を立て直しました。以後は再起動でも自動で復帰します`); setTimeout(poll,4000);} return;} name=pick.trim();}
+  else {name=(prompt('スレの名前(iPhoneのアプリに出る表示名)')||'').trim();}
+  if(!name) return;
+  const pr=(await (await fetch('/api/presets')).json()).presets||['なし'];
+  const psel=prompt(`雛形を番号で(${pr.map((p,i)=>`${i+1}=${p}`).join(' / ')})`,'1'); if(psel===null) return;
+  const preset=pr[Math.max(0,Math.min(pr.length-1,(parseInt(psel,10)||1)-1))];
+  const j=await api('/api/new',{name,preset}); if(j.ok){setTimeout(poll,4000);}
+}
+
+// ================= ⋯ メニュー(ホーム以外への導線・スレの止める/再起動/ブリーフィングをここに集約) =================
+let threadMenuTarget=null, threadMenuName='';
+const homeMenuEl=document.getElementById('homeMenu'), threadMenuEl=document.getElementById('threadMenu');
+function openMenu(el){el.classList.add('on');}
+function closeMenus(){homeMenuEl.classList.remove('on'); threadMenuEl.classList.remove('on');}
+document.getElementById('homeMenuBtn').addEventListener('click',e=>{e.stopPropagation(); openMenu(homeMenuEl);});
+document.getElementById('threadMenuBtn').addEventListener('click',e=>{e.stopPropagation(); openMenu(threadMenuEl);});
+homeMenuEl.addEventListener('click',e=>{if(e.target===homeMenuEl) closeMenus();});
+threadMenuEl.addEventListener('click',e=>{if(e.target===threadMenuEl) closeMenus();});
+// 起動時ブリーフィング編集(全画面オーバーレイ。2026-09-24: prompt() は iPhone だと1行しか見えず
+// 800字の複数行ブリーフィングが読めない・編集できなかったため置き換え)
+const briefEl=document.getElementById('brief'), briefTitleEl=document.getElementById('briefTitle'),
+  briefTextEl=document.getElementById('briefText'), briefSaveBtn=document.getElementById('briefSave'),
+  briefBackBtn=document.getElementById('briefBack'), briefCntEl=document.getElementById('briefCnt');
+let briefWin=null, briefOrig='';
+function briefUpdateCnt(){
+  const n=briefTextEl.value.length;
+  briefCntEl.textContent=n+' / 4000';
+  briefCntEl.style.color=n>4000?'var(--warn)':'';
+}
+function briefDirty(){ return briefTextEl.value!==briefOrig; }
+function closeBrief(force){
+  if(!force && briefDirty() && !confirm('変更を捨てますか?')) return;
+  briefEl.classList.remove('on'); briefEl.style.top=''; briefEl.style.height=''; briefWin=null;
+}
+// iOS: キーボードが出るとレイアウトビューポートは縮まないので、visualViewport に合わせて
+// オーバーレイ自体の高さ(top/height)を実測値へ書き換える(#confirm 用の fitBar() と同じ考え方)
+function fitBrief(){
+  const vv=window.visualViewport; if(!vv||!briefEl.classList.contains('on')) return;
+  briefEl.style.top=vv.offsetTop+'px'; briefEl.style.height=vv.height+'px';
+}
+if(window.visualViewport){visualViewport.addEventListener('resize',fitBrief); visualViewport.addEventListener('scroll',fitBrief);}
+document.addEventListener('keydown',e=>{if(e.key==='Escape'&&briefEl.classList.contains('on')) closeBrief(false);});
+briefBackBtn.addEventListener('click',()=>closeBrief(false));
+briefTextEl.addEventListener('input',briefUpdateCnt);
+briefSaveBtn.addEventListener('click',async()=>{
+  briefSaveBtn.disabled=true;
+  const v=briefTextEl.value;
+  const j=await api('/api/session/brief',{window:briefWin,brief:v});
+  if(j.ok){
+    briefOrig=v; briefSaveBtn.textContent='保存しました';
+    setTimeout(()=>{ closeBrief(true); setTimeout(poll,500); },500);
+  } else {
+    briefSaveBtn.disabled=false;
+  }
+});
+async function editBrief(w){
+  const s=sessions.find(x=>x.window===w);
+  briefWin=w; briefOrig=''; briefTitleEl.textContent='ブリーフィング: '+(threadMenuName||(s&&s.name)||w);
+  briefTextEl.value=''; briefTextEl.disabled=true; briefSaveBtn.disabled=true; briefSaveBtn.textContent='保存';
+  briefUpdateCnt();
+  briefEl.classList.add('on'); fitBrief();
+  try{
+    const cur=(await (await fetch('/api/session/brief?window='+encodeURIComponent(w),{cache:'no-store'})).json()).brief||'';
+    if(briefWin!==w) return;   // 待っている間に閉じた/別スレを開いた
+    briefOrig=cur; briefTextEl.value=cur; briefUpdateCnt();
+  }catch(e){}
+  briefTextEl.disabled=false; briefSaveBtn.disabled=false; briefTextEl.focus();
+}
+async function restartThread(w){
+  if(!confirm('このスレの会話をリセット(/clear)しますか?\n止まっている場合は立て直します')) return;
+  await api('/api/restart',{window:w,force:false}); setTimeout(poll,3000);
+}
+// 司令室の中の移動は履歴を積まない(2026-09-24)。積むと、スレから左端スワイプしたときに iOS の
+// 「戻る」も同時に動き、前に開いた /plan#tab=num や vault の #f=… に戻っていた。
+// ⋯メニューは location.replace、本文中の同一オリジンのリンク(#f= など)はここで replace に替える。
+document.addEventListener('click',e=>{
+  if(e.defaultPrevented||e.button||e.metaKey||e.ctrlKey||e.shiftKey) return;
+  const a=e.target.closest&&e.target.closest('a[href]'); if(!a||a.target||a.hasAttribute('download')) return;
+  const h=a.getAttribute('href'); if(!h||h==='#') return;
+  let u; try{u=new URL(h,location.href);}catch(_){return;}
+  if(u.origin!==location.origin) return;
+  e.preventDefault();
+  // ハッシュだけ違う(#f= #d= #t= など)ときは replace に頼らない(2026-09-24)。iOS の PWA では
+  // location.replace で hashchange が来ないことがあり、vault の md リンクが開かなかった。同じハッシュの
+  // 再タップでも開くよう、履歴を書き換えてから hashchange を自分で投げる(受け手は vault/home.js ほか)。
+  if(u.pathname===location.pathname&&u.search===location.search&&u.hash){
+    const old=location.href; history.replaceState(history.state,'',u.href);
+    window.dispatchEvent(new HashChangeEvent('hashchange',{oldURL:old,newURL:u.href})); return;
+  }
+  location.replace(u.href);
+});
+homeMenuEl.addEventListener('click',async e=>{
+  const b=e.target.closest('button[data-act],button[data-href]'); if(!b) return;
+  const act=b.dataset.act; closeMenus();
+  if(act==='plan') location.replace('/plan');
+  else if(act==='note') location.replace('/note');
+  else if(act==='workout') location.replace('/workout');
+  else if(act==='num') location.replace('/plan#tab=num');
+  else if(act==='newthread') startNewThread();
+  else if(act&&TP.menuActions[act]) TP.menuActions[act]();   // room 登録分(例: vault の "📁 vault")
+  else if(b.dataset.href) location.replace(b.dataset.href);
+});
+threadMenuEl.addEventListener('click',async e=>{
+  const b=e.target.closest('button[data-act]'); if(!b) return;
+  const act=b.dataset.act; closeMenus();
+  const w=threadMenuTarget; if(!w) return;
+  if(act==='brief') editBrief(w);
+  else if(act==='restart') restartThread(w);
+  else if(act==='stop') stopThread(w,threadMenuName);
+});
+
+// ================= ヘッダーのアイコン(線画SVG。絵文字は使わない) =================
+// 3つとも 22x22・stroke-width 2・fill:none;stroke:currentColor で統一。状態は斜線/塗りの有無と不透明度で見分ける
+const ICON_SPEAKER_ON=`<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>`;
+const ICON_SPEAKER_OFF=`<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>`;
+const ICON_BELL_ON=`<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>`;
+const ICON_BELL_OFF=`<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.73 21a2 2 0 0 1-3.46 0"/><path d="M18.63 13A17.89 17.89 0 0 1 18 8"/><path d="M6.26 6.26A5.86 5.86 0 0 0 6 8c0 7-3 9-3 9h14"/><path d="M18 8a6 6 0 0 0-9.33-5"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+
+// ================= 読み上げ(運転モード) =================
+let tts=false; try{tts=localStorage.getItem('tp.tts')==='1';}catch(e){}
+const ttsBtn=document.getElementById('ttsBtn'); function ttsUI(){ttsBtn.innerHTML=tts?ICON_SPEAKER_ON:ICON_SPEAKER_OFF; ttsBtn.style.opacity=tts?'1':'.55'; ttsBtn.setAttribute('aria-label',tts?'読み上げ オン':'読み上げ オフ'); ttsBtn.title=tts?'読み上げ オン':'読み上げ オフ';} ttsUI();
+function speak(text){if(!('speechSynthesis' in window)||!text) return; speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(text.replace(/`[^`]*`/g,'').replace(/https?:\/\/\S+/g,'URL').replace(/[#*_>|]/g,'').slice(0,1500)); u.lang='ja-JP'; u.rate=1.05;
+  const v=speechSynthesis.getVoices().find(v=>v.lang==='ja-JP'); if(v) u.voice=v; speechSynthesis.speak(u);}
+ttsBtn.addEventListener('click',e=>{e.stopPropagation(); tts=!tts; try{localStorage.setItem('tp.tts',tts?'1':'0');}catch(e){} ttsUI(); if(tts) speak('読み上げをオンにしました'); else speechSynthesis.cancel();});
+document.addEventListener('click',e=>{const b=e.target.closest('.re .say'); if(b){e.stopPropagation(); speak(b.parentElement.dataset.text||b.parentElement.textContent);}},true);
+
+// ================= 通知(Web Push) =================
+const pushBtn=document.getElementById('pushBtn');
+function b64uToU8(s){const b=atob(s.replace(/-/g,'+').replace(/_/g,'/')+'='.repeat((4-s.length%4)%4));return Uint8Array.from(b,c=>c.charCodeAt(0));}
+async function pushState(){try{const reg=await navigator.serviceWorker?.getRegistration(); const sub=reg&&await reg.pushManager.getSubscription(); pushBtn.innerHTML=sub?ICON_BELL_ON:ICON_BELL_OFF; pushBtn.style.opacity=sub?'1':'.55'; pushBtn.setAttribute('aria-label',sub?'通知 購読中':'通知 未購読'); pushBtn.title=sub?'通知 購読中':'通知 未購読'; return sub;}catch(e){return null;}}
+pushBtn.innerHTML=ICON_BELL_OFF; pushBtn.style.opacity='.55';   // register() が呼ばれるまでの初期表示(非対応環境でも空にしない)
+const swUpdateEl=document.getElementById('swUpdate');
+let waitingSW=null;
+function showSwUpdate(w){waitingSW=w; swUpdateEl.hidden=false;}
+// ページ自身の版(X-Shell-Version)を覚え、SSE/ポーリングで届く版と違えばバッジを出す
+let shellVer=null; fetch('/',{method:'GET',cache:'no-store',headers:{'Range':'bytes=0-0'}}).then(r=>{shellVer=r.headers.get('X-Shell-Version');}).catch(()=>{});
+setInterval(()=>{fetch('/api/push/key',{cache:'no-store'}).then(r=>r.json()).then(k=>{if(k.shell&&shellVer&&k.shell!==shellVer) swUpdateEl.hidden=false;}).catch(()=>{});},60000);
+addEventListener('hashchange',()=>{if(location.hash.startsWith('#t=')) openThread(decodeURIComponent(location.hash.slice(3)));});
+if('serviceWorker' in navigator){
+  // 通知タップ → SW から「このスレを開いて」。ページを開いたままスレ直行
+  navigator.serviceWorker.addEventListener('message',e=>{fetch('/api/clientlog',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({src:'page',ev:'sw-message',data:JSON.stringify(e.data)})}).catch(()=>{}); if(e.data&&e.data.type==='open'&&e.data.window){openThread(e.data.window);}});
+  navigator.serviceWorker.register('/sw.js').then(reg=>{
+    pushState();
+    // 新しい SW は自動で有効化する(通知の処理系を古いまま残さない)。ページの再読込はバナーのタップ時だけ
+    if(reg.waiting) reg.waiting.postMessage({type:'SKIP_WAITING'});
+    if(reg.waiting&&navigator.serviceWorker.controller) showSwUpdate(reg.waiting);
+    reg.addEventListener('updatefound',()=>{
+      const nw=reg.installing; if(!nw) return;
+      nw.addEventListener('statechange',()=>{ if(nw.state==='installed'&&navigator.serviceWorker.controller){ showSwUpdate(nw); nw.postMessage({type:'SKIP_WAITING'}); } });
+    });
+  }).catch(()=>{});
+  // controllerchange での勝手な reload はしない。更新はユーザーがバナーをタップしたときだけ
+  // バッジのタップ = 再読込(SW 自体は自動で切り替わっているので、HTML を取り直すだけでよい)
+  swUpdateEl.addEventListener('click',e=>{e.stopPropagation(); if(waitingSW){try{waitingSW.postMessage({type:'SKIP_WAITING'});}catch(_){}} setTimeout(()=>location.reload(),150);});
+  // 新しい SW が制御を奪った瞬間に「更新しました」を一言だけ出す(ループ防止フラグ付き。reload はしない)
+  let controllerChangeShown=false;
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{
+    if(controllerChangeShown) return; controllerChangeShown=true;
+    toastEl.className='on ok'; toastEl.querySelector('.t').textContent='新しい版に更新しました'; toastEl.querySelector('.b').textContent=''; delete toastEl.dataset.w;
+    clearTimeout(toastTimer); toastTimer=setTimeout(()=>{toastEl.className='';},4000);
+  });
+}
+// ページの版(<meta name=tp-version>)と /api/version を突き合わせ、古ければ1回だけ再読込する(2重発火防止)
+(function(){
+  const myVer=document.querySelector('meta[name="tp-version"]')?.getAttribute('content')||'';
+  let reloaded=false;
+  function checkVersion(){
+    if(reloaded||!myVer) return;
+    fetch('/api/version',{cache:'no-store'}).then(r=>r.json()).then(j=>{
+      if(reloaded||!j.version||j.version===myVer) return;
+      reloaded=true;
+      toastEl.className='on ok'; toastEl.querySelector('.t').textContent='新しい版があります。再読み込みします'; toastEl.querySelector('.b').textContent=''; delete toastEl.dataset.w;
+      setTimeout(()=>location.reload(),600);
+    }).catch(()=>{});
+  }
+  checkVersion();
+  document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') checkVersion(); });
+})();
+pushBtn.addEventListener('click',async e=>{e.stopPropagation();
+  if(!('serviceWorker' in navigator)||!('PushManager' in window)){alert('この開き方では通知が使えません。HTTPS の URL をホーム画面に追加して、そこから開いてください');return;}
+  if(location.protocol!=='https:'){const k=await (await fetch('/api/push/key')).json(); alert(`通知は HTTPS 側で設定します:\nhttps://${k.host}:${k.port}/\nを Safari で開き「ホーム画面に追加」→ そのアイコンから開いて 🔕 を押してください`);return;}
+  const reg=await navigator.serviceWorker.ready; let sub=await reg.pushManager.getSubscription();
+  if(sub){const k=await (await fetch('/api/push/key')).json(); const cur={need:'1',done:'2',all:'3'}[k.level]||'2';
+    const a=prompt(`通知の範囲を選んでください(現在 ${cur})\n1 = 要対応だけ(承認・選択・信頼確認)\n2 = 完了も\n3 = 停止・消滅も\n0 = 通知をオフ\n9 = 通知の仕組みを作り直す(不調のとき。再登録が要ります)`,cur); if(a===null) return;
+    if(a==='9'){try{await fetch('/api/push/unsubscribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({endpoint:sub.endpoint})}); await sub.unsubscribe();}catch(_){} const regs=await navigator.serviceWorker.getRegistrations(); for(const r of regs){await r.unregister();} alert('作り直しました。再読み込み後に 🔕 を押して通知を登録し直してください'); location.reload(); return;}
+    if(a==='0'){await fetch('/api/push/unsubscribe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({endpoint:sub.endpoint})}); await sub.unsubscribe(); pushState(); return;}
+    const lv={'1':'need','2':'done','3':'all'}[a]; if(lv) await api('/api/push/level',{level:lv}); return;}
+  const perm=await Notification.requestPermission(); if(perm!=='granted'){alert('通知が許可されませんでした');return;}
+  const k=await (await fetch('/api/push/key')).json(); if(!k.ok){alert('サーバー側が通知に対応していません');return;}
+  sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:b64uToU8(k.key)});
+  const j=await api('/api/push/subscribe',{subscription:{endpoint:sub.endpoint,keys:{p256dh:b64uFromBuf(sub.getKey('p256dh')),auth:b64uFromBuf(sub.getKey('auth'))},ua:navigator.userAgent}});
+  if(j.ok){pushState(); if(confirm('登録しました。テスト通知を送りますか?')) api('/api/push/test',{});}
+});
+function b64uFromBuf(buf){return btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');}
+
+// ================= 添付(写真・ファイル → inbox) =================
+const attachments={};   // key('main' or window) -> [{id,name,size,status:'uploading'|'done'|'error',pct,path,error,xhr}]
+const fileInput=document.getElementById('file-main');
+let attTarget='main';
+let attSeq=0;
+document.addEventListener('click',e=>{const b=e.target.closest('button.clip'); if(!b) return; e.stopPropagation(); attTarget=b.dataset.att; fileInput.value=''; fileInput.click();},true);
+fileInput.addEventListener('change',()=>{const files=[...fileInput.files]; const key=attTarget; files.forEach(f=>uploadFile(key,f));});
+function updateSendEnabledFor(key){ if(key==='main') updateSendEnabled(); else updateCardSendEnabled(key); }
+function uploadFile(key,f){
+  const id='a'+(++attSeq);
+  const item={id,name:f.name||'photo.jpg',size:f.size||0,status:'uploading',pct:0,path:null,error:null,xhr:null};
+  (attachments[key]=attachments[key]||[]).push(item);
+  renderAtt(key); updateSendEnabledFor(key);
+  const xhr=new XMLHttpRequest(); item.xhr=xhr;
+  xhr.open('POST','/api/upload?name='+encodeURIComponent(item.name));
+  xhr.upload.onprogress=e=>{ if(!e.lengthComputable) return; item.pct=Math.round(e.loaded/e.total*100); updateChipProgress(key,id,item.pct); };
+  xhr.onload=()=>{
+    let j=null; try{j=JSON.parse(xhr.responseText);}catch(err){}
+    item.xhr=null;
+    if(xhr.status>=200&&xhr.status<300&&j&&j.ok){ item.status='done'; item.path=j.path; item.size=j.size; item.pct=100; }
+    else { item.status='error'; item.error=(j&&j.error)||('HTTP '+xhr.status); }
+    renderAtt(key); updateSendEnabledFor(key);
+  };
+  xhr.onerror=()=>{ item.xhr=null; item.status='error'; item.error='通信エラー'; renderAtt(key); updateSendEnabledFor(key); };
+  xhr.onabort=()=>{ item.xhr=null; };
+  xhr.send(f);
+}
+// 描画先は id ではなく data-att-for で探して**全部**更新する(2026-09-22)。
+// ホームの入力欄はキー 'main'、スレの入力欄は window 名がキーで、Main スレの window は 'main'。
+// 以前は両方が id="att-main" を持っていて、getElementById が必ず先に書かれたホーム側を掴み、
+// Main スレで添付してもチップがスレ側に出ず、見えないホーム側の高さが変わって入力欄が半端に隠れていた。
+// 同じキーを見せている場所は全部同じ中身でよいので、querySelectorAll で回す。
+function attEls(key){return document.querySelectorAll('[data-att-for="'+key+'"]');}
+function renderAtt(key){const els=attEls(key); if(!els.length) return; const a=attachments[key]||[];
+  const html=a.map((x,i)=>{
+    if(x.status==='uploading') return `<span class="chip uploading" data-cid="${x.id}">${esc(x.name)} <span class="pct">${x.pct||0}%</span><span class="bar" style="width:${x.pct||0}%"></span><b data-rm="${key}:${i}">✕</b></span>`;
+    if(x.status==='error') return `<span class="chip error" data-cid="${x.id}">${esc(x.name)} <span class="err">失敗: ${esc(x.error||'?')}</span><b data-rm="${key}:${i}">✕</b></span>`;
+    return `<span class="chip" data-cid="${x.id}">${esc(x.name)} (${(x.size/1024).toFixed(0)}K)<b data-rm="${key}:${i}">✕</b></span>`;
+  }).join('');
+  els.forEach(el=>{el.innerHTML=html;});
+  // チップが増減すると入力欄の高さが変わる。本文の下余白(--compose-h / --tcompose-h)を測り直さないと
+  // 会話の最後が入力欄の裏に入る。ホーム側は ResizeObserver があるがスレ側には無いので、ここで両方呼ぶ。
+  try{ syncComposeHeight(); }catch(e){}
+  try{ syncTcomposeHeight(); }catch(e){}}
+function updateChipProgress(key,id,pct){attEls(key).forEach(el=>{
+  const chip=el.querySelector(`[data-cid="${id}"]`); if(!chip) return;
+  const bar=chip.querySelector('.bar'); if(bar) bar.style.width=pct+'%';
+  const p=chip.querySelector('.pct'); if(p) p.textContent=pct+'%';});}
+document.addEventListener('click',e=>{const b=e.target.closest('b[data-rm]'); if(!b) return; e.stopPropagation(); const [k,i]=b.dataset.rm.split(':'); const item=attachments[k]&&attachments[k][+i];
+  if(item&&item.status==='uploading'&&item.xhr){try{item.xhr.abort();}catch(err){}}
+  if(attachments[k]) attachments[k].splice(+i,1); renderAtt(k); updateSendEnabledFor(k);},true);
+function withAttachments(key,text){const a=attachments[key]||[]; const doneItems=a.filter(x=>x.status==='done'); if(!doneItems.length) return text;
+  const lines=doneItems.map(x=>x.path); attachments[key]=a.filter(x=>x.status!=='done'); renderAtt(key); updateSendEnabledFor(key);
+  return (text.trim()||'添付ファイルを見てください。')+'\n\n添付ファイル(このパスを読んでください):\n'+lines.join('\n');}
+function updateSendEnabled(){const a=attachments.main||[]; const uploading=a.some(x=>x.status==='uploading'); const done=a.some(x=>x.status==='done');
+  sendBtn.disabled=uploading||((!msg.value.trim()&&!done)||!mainWin());}
+function updateCardSendEnabled(w){const btn=cards.querySelector(`button.csend[data-w="${w}"]`); if(!btn) return; const a=attachments[w]||[];
+  const uploading=a.some(x=>x.status==='uploading'); const done=a.some(x=>x.status==='done');
+  const ta=cards.querySelector(`textarea[data-w="${w}"]`); const hasText=ta&&ta.value.trim();
+  btn.disabled=uploading||(!hasText&&!done);}
+
+// ================= 送信(v1) =================
+const msg=document.getElementById('msg'), sendBtn=document.getElementById('sendBtn'), confirmEl=document.getElementById('confirm');
+const chats={};   // window -> [{who:'me'|'re', text, live}]
+const FOOT=/^\s*(⏵⏵|⏸|\?\s*for shortcuts|auto mode|accept edits|plan mode|bypass|─{10,}|❯)/;
+const NOISE=/(Tip:|Update installed|Restart to apply|ctrl\+b|esc to interrupt|to run in background|^\s*[^\w\s\-]\s\S+(…\s*\(|\sfor\s\d)|^\s*current work\s*$|\/btw|shift\+tab|← for agents|^\s*\/rc\s*$)/i;
+// Claude Code の画面を会話に分解: ❯=自分 / ●=Claude / ● Tool( と ⎿=ツール実行 / 字下げ行=直前の続き
+function parseChat(txt){const blocks=[]; let cur=null;
+  // 入力欄(最後から2番目の区切り線より後ろ)は会話ではないので落とす
+  let lines=txt.split('\n'); const seps=lines.map((l,i)=>/^─{10,}/.test(l.trim())?i:-1).filter(i=>i>=0); if(seps.length>=2) lines=lines.slice(0,seps[seps.length-2]);
+  for(const raw of lines){const l=raw.replace(/\s+$/,''); if(!l.trim()||/^─+/.test(l.trim())) continue;
+    let m;
+    if((m=l.match(/^❯\s+(.*)/))){cur={role:'me',lines:[m[1]],raw:[l]};blocks.push(cur);continue;}
+    if(FOOT.test(l)||NOISE.test(l)) continue;
+    if(/^\s*[│┌├└┼┬┴┐┤┘]/.test(l)){ if(cur&&cur.role==='table'){cur.lines.push(l);} else {cur={role:'table',lines:[l],raw:[l]};blocks.push(cur);} continue; }
+    if(/^(Searched for|Listed|Read \d|Ran \d|Wrote|Edited|User answered)\b/i.test(l.trim())){cur={role:'tool',lines:[l.trim()],raw:[l]};blocks.push(cur);continue;}
+    if((m=l.match(/^[●⏺]\s+(.*)/))){const body=m[1]; const isTool=/^[A-Z][A-Za-z]+\(/.test(body)||/^(Reading|Writing|Editing|Searching|Running|Ran|User answered)\b/i.test(body);
+      cur={role:isTool?'tool':'re',lines:[body],raw:[l]};blocks.push(cur);continue;}
+    if(/^\s*⎿/.test(l)){if(cur&&cur.role==='tool'){cur.lines.push(l.replace(/^\s*⎿\s?/,''));cur.raw.push(l);}else{cur={role:'tool',lines:[l.replace(/^\s*⎿\s?/,'')],raw:[l]};blocks.push(cur);}continue;}
+    if(cur){cur.lines.push(l);cur.raw.push(l);}else{cur={role:'re',lines:[l],raw:[l]};blocks.push(cur);}
+  }
+  return blocks;}
+function chatKey(x){return x.role+'\n'+x.lines.join('\n');}
+// 道具行(Ran 3 shell commands 等)を標準アプリ風の日本語1行に畳む。展開すると生ログが見える
+function toolSeg(seg){seg=seg.trim(); let m;
+  if((m=seg.match(/^ran (\d+) shell commands?$/i))) return `${m[1]}件のコマンドを実行し`;
+  if((m=seg.match(/^ran (\d+) agents?$/i))) return `${m[1]}件のエージェントを実行し`;
+  if((m=seg.match(/^read (\d+) files?$/i))) return `${m[1]}件のファイルを読み`;
+  if((m=seg.match(/^listed (\d+) directory$/i))||(m=seg.match(/^listed (\d+) directories$/i))) return `${m[1]}件のフォルダを一覧し`;
+  if(/^wrote\b/i.test(seg)) return 'ファイルを作成し';
+  if(/^edited\b/i.test(seg)) return 'ファイルを編集し';
+  if(/^searched for/i.test(seg)) return '検索し';
+  return null;
+}
+function toolLabel(lines){
+  const first=(lines[0]||'').trim();
+  if(/^user answered/i.test(first)){
+    const items=lines.slice(1).map(l=>l.trim()).filter(l=>/^[·・]/.test(l));
+    const parsed=items.map(l=>{const m=l.match(/→\s*(.+)$/); return (m?m[1]:l.replace(/^[·・]\s*/,'')).trim();});
+    if(parsed.length) return `質問に回答しました: ${parsed[0].slice(0,26)}${parsed.length>1?` ほか${parsed.length-1}件`:''}`;
+    return '質問に回答しました';
+  }
+  if(/summarized/i.test(first)) return '会話を要約しました';
+  const segs=first.split(/,\s*/).map(toolSeg);
+  if(segs.length&&segs.every(Boolean)) return segs.join('、')+'ました';
+  return 'ツールを実行しました';
+}
+function toolBlockHTML(lines,wasOpen){
+  const label=toolLabel(lines), raw=esc(unwrap(lines).join('\n'));
+  return `${esc(label)} <span class="chev">›</span><span class="full" ${wasOpen?'':'hidden'}>${raw}</span>`;
+}
+// Claude の返答末尾に付く「· summarized」を切り離し、折りたたみ行として別扱いにする
+const SUMMARIZED_RE=/\s*[·・]\s*summarized\s*$/i;
+function chatBlockHTML(x){
+  if(x.role==='table') return renderTable(x.lines);
+  if(x.role==='tool') return `<div class="tool" title="タップで展開">${toolBlockHTML(x.lines,false)}</div>`;
+  let text=unwrap(x.lines).join('\n'); let summarized=false;
+  if(x.role==='re'&&SUMMARIZED_RE.test(text)){text=text.replace(SUMMARIZED_RE,''); summarized=true;}
+  const sumHTML=summarized?`<div class="tool sumtag" title="タップで展開">会話を要約しました <span class="chev">›</span><span class="full" hidden>${esc(unwrap(x.lines).join('\n'))}</span></div>`:'';
+  return `<div class="${x.role}" data-text="${esc(text)}">${linkify(text)}${x.role==='re'?' <span class="say" style="cursor:pointer;opacity:.5">▶︎</span>':''}<button class=\"copy\" title=\"コピー\">⧉</button>${sumHTML}</div>`;
+}
+// ブロックの中身だけを差し替える(ノード自体は残す→ .tool.open 等の開閉状態を保つ)
+function chatBlockUpdate(el,x){
+  if(x.role==='tool'){
+    const wasOpen=el.classList.contains('open');
+    el.innerHTML=toolBlockHTML(x.lines,wasOpen);
+  } else {
+    let text=unwrap(x.lines).join('\n'); let summarized=false;
+    if(x.role==='re'&&SUMMARIZED_RE.test(text)){text=text.replace(SUMMARIZED_RE,''); summarized=true;}
+    el.dataset.text=text;
+    const sumHTML=summarized?`<div class="tool sumtag" title="タップで展開">会話を要約しました <span class="chev">›</span><span class="full" hidden>${esc(unwrap(x.lines).join('\n'))}</span></div>`:'';
+    el.innerHTML=linkify(text)+(x.role==='re'?' <span class="say" style="cursor:pointer;opacity:.5">▶︎</span>':'')+'<button class="copy" title="コピー">⧉</button>'+sumHTML;
+  }
+}
+// tail(チャットログ)をブロック単位で差分更新する。既存 DOM のキー配列と先頭から比較し、
+// 一致する先頭部分は触らず、それ以降だけ削除・追加する。「もっと読む」「.tool.open」は
+// 要素のキーで自然に保持される(触らないノードはそのまま)
+function renderTail(tailEl,s){
+  const w=s.window;
+  if(s.full===undefined){tailEl.innerHTML='<div class="none">読み込み中…</div>';return;}
+  const full=parseChat(s.full);
+  if(!full.length){tailEl.innerHTML='<div class="none">(出力なし)</div>';return;}
+  const noneEl=tailEl.querySelector(':scope > .none'); if(noneEl) noneEl.remove();   // 「読み込み中…」等の骨組みを実データに差し替え
+  const LIMIT=14; let blocks=full, clipped=false;
+  if(!showAll.has(w)&&full.length>LIMIT){blocks=full.slice(-LIMIT); clipped=true;}
+  let more=tailEl.querySelector(':scope > button.more');
+  if(clipped){
+    if(!more){more=document.createElement('button'); more.className='dim more'; more.style.cssText='width:100%;padding:8px'; tailEl.insertBefore(more,tailEl.firstChild);}
+    more.dataset.w=w; more.textContent=`↑ もっと読む(あと${full.length-LIMIT}件)`;
+  } else if(more){more.remove();}
+  let log=tailEl.querySelector(':scope > .chatlog');
+  if(!log){log=document.createElement('div'); log.className='chatlog'; tailEl.appendChild(log);}
+  const items=blocks.map(x=>({x,key:chatKey(x),html:chatBlockHTML(x)})).filter(it=>it.html);
+  const kids=Array.from(log.children);
+  const oldKeys=kids.map(k=>k.dataset.key);
+  const newKeys=items.map(it=>it.key);
+  const n=Math.min(oldKeys.length,newKeys.length); let same=0;
+  while(same<n&&oldKeys[same]===newKeys[same]) same++;
+  // 最後のブロックだけ内容が伸びたケース(作業中の返答): ノードは残してテキストだけ差し替える
+  if(oldKeys.length===newKeys.length&&same===newKeys.length-1&&items.length){
+    const node=kids[same], it=items[same];
+    if(node&&node.dataset.role===it.x.role&&it.x.role!=='table'){chatBlockUpdate(node,it.x); node.dataset.key=it.key; same=newKeys.length;}
+  }
+  for(let i=kids.length-1;i>=same;i--) kids[i].remove();
+  for(let i=same;i<items.length;i++){
+    log.insertAdjacentHTML('beforeend',items[i].html);
+    const el=log.lastElementChild; el.dataset.key=items[i].key; el.dataset.role=items[i].x.role;
+  }
+}
+// 罫線の表 → HTML table。セル内の折り返し行(先頭セルが空の行)は前の行に連結
+function renderTable(lines){const rows=[]; let cur=null;
+  // 行の区切りは ├───┼───┤ の罫線。区切りの間にある複数の │ 行は同じ行の折り返し(セルごとに連結)
+  for(const l of lines){const s=l.trim();
+    if(/^[┌├└]/.test(s)){ if(cur) rows.push(cur); cur=null; continue; }
+    if(!/^│/.test(s)) continue;
+    const cells=s.replace(/^│/,'').replace(/│$/,'').split('│').map(c=>c.trim());
+    if(!cur){cur=cells;} else {cells.forEach((c,i)=>{ if(c) cur[i]=((cur[i]||'')+(/[A-Za-z0-9)]$/.test(cur[i]||'')&&/^[A-Za-z0-9(]/.test(c)?' ':'')+c); });}
+  }
+  if(cur) rows.push(cur);
+  if(!rows.length) return '';
+  const th=rows[0], body=rows.slice(1);
+  return `<div class="tbl"><table><tr>${th.map(c=>`<th>${esc(c)}</th>`).join('')}</tr>${body.map(r=>`<tr>${r.map(c=>`<td>${esc(c)}</td>`).join('')}</tr>`).join('')}</table></div>`;}
+function lastReply(txt){const b=parseChat(txt).filter(x=>x.role==='re'); return b.length?unwrap(b[b.length-1].lines).join('\n'):'';}
+// ~/vault/... の linkify は room(vault)が TP.linkifiers に登録する(段階: vault を公開サンプルの room にする)。
+// vault が無効/未読み込みのときは TP.linkifiers が空のままなので、パスはただの文字列として出る。
+function linkify(s){let h=esc(s)
+  .replace(/(https?:\/\/[^\s<>"']+)/g,u=>{const m=u.match(/#(f|d)=([^\s]+)$/); return m?`<a href="#${m[1]}=${m[2]}">${u}</a>`:`<a href="${u}" target="_blank" rel="noopener">${u}</a>`;});
+  for(const fn of TP.linkifiers) h=fn(h);
+  return h;}
+function cleanFull(txt){return txt.split('\n').filter(l=>l.trim()&&!FOOT.test(l)&&!NOISE.test(l)&&!/^─+/.test(l.trim())).join('\n');}
+function mainWin(){const s=sessions.find(x=>x.name==='Main'||x.window==='main');return s?s.window:null;}
+msg.addEventListener('input',()=>{autoGrow(msg);syncComposeHeight();updateSendEnabled();});
+let pending=null;
+let skipConfirm=false; try{skipConfirm=localStorage.getItem('tp.skipConfirm')==='1';}catch(e){}
+function openConfirm(w,name,text,after){pending={w,text,after}; if(skipConfirm){document.getElementById('cYes').click();return;}document.getElementById('cTo').textContent=name;document.getElementById('cTxt').textContent=text;confirmEl.classList.add('on');}
+const composeEl=document.getElementById('compose');
+// #compose は #home の内側にあり position:fixed で画面いちばん下に固定。#home が非表示になれば
+// (スレ画面にいる間)祖先の display:none で一緒に隠れるので、二重表示は起きない。
+// #homeScroll の padding-bottom を実測の高さに合わせて確保し、本文がその下に隠れないようにする
+function syncComposeHeight(){try{document.documentElement.style.setProperty('--compose-h',composeEl.getBoundingClientRect().height+'px');}catch(e){}}
+syncComposeHeight();
+if(window.ResizeObserver) new ResizeObserver(syncComposeHeight).observe(composeEl);
+else addEventListener('resize',syncComposeHeight);
+// iOS: position:fixed はレイアウトビューポート基準のままで、キーボードが出た分を
+// 自動では引いてくれない。visualViewport との差分を --kb に反映し、#compose/.cardsend が
+// それを起点に動くことで、入力欄とキーボードの間の死んだ余白と、上のコンテンツが
+// 途中で切れる問題を直す。visualViewport が無い環境では --kb は常に 0px。
+let lastKbLogged=null;
+// --kb の実数を診断のため /api/clientlog に送る(2026-09-22)。過補正でないかを実機で確かめるための
+// 一時的な計測。値が変わったときだけ送る(スクロール中の連打を避けるため)。計算式そのものはここでは変えない
+function logKb(vv,kb){
+  if(kb===lastKbLogged) return; lastKbLogged=kb;
+  try{
+    const cr=composeEl?composeEl.getBoundingClientRect():null;
+    fetch('/api/clientlog',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      src:'page',ev:'kb',
+      innerH:innerHeight,docClientH:document.documentElement.clientHeight,vvH:Math.round(vv.height),vvTop:Math.round(vv.offsetTop),vvScale:vv.scale,kb:kb,
+      composeTop:cr?Math.round(cr.top):null,composeBottom:cr?Math.round(cr.bottom):null,
+      scrollH:threadScrollEl?threadScrollEl.scrollHeight:null,scrollTop:threadScrollEl?Math.round(threadScrollEl.scrollTop):null,clientH:threadScrollEl?threadScrollEl.clientHeight:null
+    })}).catch(()=>{});
+  }catch(e){}
+}
+function kbOpen(){
+  const a=document.activeElement;
+  if(!a) return false;
+  if(a.tagName==='TEXTAREA') return true;
+  return a.tagName==='INPUT' && !/^(file|checkbox|radio|button|submit|reset|image)$/i.test(a.type||'text');
+}
+function syncKb(){
+  const vv=window.visualViewport;
+  if(!vv){ document.documentElement.style.setProperty('--kb','0px'); return; }
+  // innerHeight は場面によってレイアウトの高さ(document.documentElement.clientHeight)より
+  // 小さくなることがあり(実機で innerHeight=578/586 に対し clientHeight=762 の記録あり)、
+  // そのとき差が負になって Math.max(0,...) で 0 に潰れ、キーボードの補正が効かなくなる。
+  // position:fixed が実際に基準にするのはレイアウトの高さなので、そちらを使う
+  // (両方取って大きいほうを採る=通常時は innerHeight のままで挙動は変わらない)。
+  const layoutH=Math.max(document.documentElement.clientHeight||0, innerHeight||0);
+  // キーボードが出ているのは「文字が打てる要素にフォーカスがある」ときだけ。
+  // iOS はキーボードを閉じる途中の visualViewport を1回だけ通知して、閉じ終わりの
+  // resize を落とすことがある(2026-09-24 実測: 07:11:46 に kb=295 を最後に20秒間
+  // 無通知のまま入力欄が画面の途中に浮いた)。フォーカスで門番すれば、通知が来ない
+  // ままでも浮きっぱなしにならない。
+  const kb=kbOpen() ? Math.max(0, Math.round(layoutH - vv.height - vv.offsetTop)) : 0;
+  document.documentElement.style.setProperty('--kb', kb+'px');
+  logKb(vv,kb);
+}
+// 閉じ終わりの通知が落ちる場合の保険。resize/focusout のあと少し置いてもう一度測る。
+let kbSettleT=null;
+function syncKbSettle(){ syncKb(); clearTimeout(kbSettleT); kbSettleT=setTimeout(syncKb,300); }
+if(window.visualViewport){ visualViewport.addEventListener('resize',syncKbSettle); visualViewport.addEventListener('scroll',syncKb); }
+addEventListener('focusin',syncKb);
+addEventListener('focusout',syncKbSettle);
+addEventListener('orientationchange',syncKb);
+syncKb();
+// 送信後に文字が入力欄に戻ることがある(2026-09-24)。iOS の日本語入力は、変換中(未確定)の文字を
+// 入力欄を空にした「あと」で確定して書き戻す。送る前に blur して確定させ、空にしたあとも少しの間
+// 見張って、送った文の一部が戻ってきたら消す(新しく打ち始めた文字は、送った文に含まれないので消さない)。
+function clearLeftover(ta,sent,after){
+  const chk=()=>{const v=ta.value.trim(); if(v&&document.activeElement!==ta&&sent.includes(v)){ta.value=''; after&&after();}};
+  [60,250,600].forEach(ms=>setTimeout(chk,ms));
+}
+sendBtn.addEventListener('click',()=>{const w=mainWin(); if(!w) return; msg.blur(); const sent=msg.value; openConfirm(w,'Main',withAttachments('main',msg.value),()=>{msg.value='';msg.style.height='auto';syncComposeHeight();updateSendEnabled();clearLeftover(msg,sent,()=>{msg.style.height='auto';syncComposeHeight();updateSendEnabled();});});});
+document.getElementById('cNo').addEventListener('click',()=>{confirmEl.classList.remove('on');pending=null;});
+document.getElementById('cYes').addEventListener('click',async()=>{
+  confirmEl.classList.remove('on'); if(!pending) return; if(document.getElementById('cSkip').checked){skipConfirm=true;try{localStorage.setItem('tp.skipConfirm','1');}catch(e){}} const {w,text,after}=pending; pending=null; after&&after();
+  const cYesBtn=document.getElementById('cYes'); cYesBtn.disabled=true; cYesBtn.textContent='送信中…';
+  try{
+    let before=''; try{const r=await fetch('/api/pane?w='+w,{cache:'no-store'}); before=(await r.json()).text;}catch(e){}
+    const j=await api('/api/send',{window:w,text}); if(!j.ok) return;
+    const s0=sessions.find(x=>x.window===w); if(s0&&s0.full!==undefined){s0.full+='\n❯ '+text.split('\n')[0]+'\n'; render.lastSig=null; render(lastData);}
+    await openThread(w);
+    watchReply(w,text);
+  } finally {
+    cYesBtn.disabled=false; cYesBtn.textContent='送信する';
+  }
+});
+function cleanLines(txt){return txt.split('\n').map(l=>l.replace(/\s+$/,'')).filter(l=>l.trim()&&!FOOT.test(l)&&!NOISE.test(l));}
+// ターミナル幅で折り返された行をつなぐ。表示幅(全角=2)が幅の9割近く埋まっていて、文末記号で終わらず、次行が箇条書き等で始まらないときだけ結合
+let COLS=80; const MARK=/^\s*([-*•●○◦✻✶✳✢·⎿└├│┃]|\d+[.)]\s|#{1,4}\s|> )/;
+const dw=s=>{let w=0;for(const ch of s){const c=ch.codePointAt(0);w+=(c>0x2E7F&&!(c>=0xFF61&&c<=0xFF9F))?2:1;}return w;};
+function unwrap(lines){const out=[];for(let l of lines){const s=l.replace(/^\s{1,6}/,'');const prev=out[out.length-1];
+  if(prev!==undefined&&dw(prev.raw)>=COLS*0.88&&!/([。．.!?！？:：」』)]|です|ます|でした|ません|ました)\s*$/.test(prev.raw)&&!MARK.test(l)){const join=/[\x20-\x7E]$/.test(prev.text)&&/^[\x20-\x7E]/.test(s)?' ':'';prev.text+=join+s;prev.raw=l;}
+  else out.push({text:s,raw:l});}
+  return out.map(o=>o.text);}
+// 吹き出しに出さない行: ツール実行のログ(⎿ …、Reading …、Bash(...) など)
+const TOOL=/^\s*(⎿|Reading\s|Writing\s|Editing\s|Searching\s|Running\s|Ran\s\d|Bash\(|Read\(|Write\(|Edit\(|Grep\(|Glob\(|Update\(|Fetch\(|Web(Search|Fetch)\()/;
+async function watchReply(w,sent){
+  let idle=0;
+  for(let i=0;i<300;i++){
+    await new Promise(r=>setTimeout(r,2000));
+    let txt=''; try{txt=(await (await fetch('/api/pane?w='+w,{cache:'no-store'})).json()).text;}catch(e){continue;}
+    const s=sessions.find(x=>x.window===w); if(!s) return; s.full=txt; render(lastData);
+    if(threadScrollEl.scrollHeight-threadScrollEl.scrollTop-threadScrollEl.clientHeight<120) threadScrollEl.scrollTo({top:threadScrollEl.scrollHeight});
+    idle=(s.state==='idle')?idle+1:0;
+    if(idle>=2){ break; }
+  }
+}
+let lastData={ts:'',load:[],cpu_pct:'',mem_pct:'',disk_pct:'',procs:'',peers:[]};
+
+// vault 閲覧(#files オーバーレイ・openDir/openFile/renderFile・#f=/#d= のハッシュ処理・簡易 Markdown レンダラ)は
+// rooms/vault/home.js に移した(段階: vault を公開サンプルの room にする)。core に残るのはこの下の
+// #blobview(汎用オーバーレイ。他 room からも window.tpBlob 経由で使う)だけ。
+// ================= 汎用ファイルビューア・オーバーレイ(#blobview) =================
+// PDF/画像を location を変えずに全画面オーバーレイで開く。PWA はホーム画面起動のスタンドアロンで
+// ブラウザの「戻る」が無いため、target=_blank や直接ナビゲーションはユーザーを行き止まりにする。
+window.tpBlob=(()=>{
+  const el=document.getElementById('blobview'), bar=document.getElementById('bv-bar'),
+    titleEl=document.getElementById('bv-title'), body=document.getElementById('bv-body'),
+    shareBtn=document.getElementById('bv-share'), closeBtn=document.getElementById('bv-close');
+  let curUrl='', curTitle='', curType='', prevActive=null, prevOverflow='';
+  function pFromUrl(url){const m=url.match(/[?&]p=([^&]+)/); return m?decodeURIComponent(m[1]):url.split('?')[0];}
+  function nameFromUrl(url){return pFromUrl(url).split('/').pop()||'file';}
+  function extFromUrl(url){const m=pFromUrl(url).match(/\.([a-z0-9]+)$/i); return m?m[1].toLowerCase():'';}
+  function open(url,title){
+    if(!url) return;
+    curUrl=url; curType=/^(jpg|jpeg|png|webp|gif)$/i.test(extFromUrl(url))?'image':'pdf';
+    curTitle=title||nameFromUrl(url);
+    titleEl.textContent=curTitle;
+    body.innerHTML='';
+    if(curType==='image'){const img=document.createElement('img'); img.src=url; img.alt=curTitle; body.appendChild(img);}
+    else{const ifr=document.createElement('iframe'); ifr.src=url; ifr.title=curTitle; body.appendChild(ifr);}
+    prevActive=document.activeElement; prevOverflow=document.body.style.overflow;
+    document.body.style.overflow='hidden';
+    el.classList.add('on');
+  }
+  function close(){
+    if(!el.classList.contains('on')) return;
+    el.classList.remove('on'); body.innerHTML='';
+    document.body.style.overflow=prevOverflow;
+    if(prevActive&&document.contains(prevActive)&&typeof prevActive.focus==='function'){try{prevActive.focus();}catch(e){}}
+    prevActive=null; curUrl=''; curType='';
+  }
+  async function share(){
+    if(!curUrl) return;
+    const name=nameFromUrl(curUrl);
+    let blob=null;
+    try{blob=await (await fetch(curUrl)).blob();}
+    catch(e){try{window.open(curUrl,'_blank');}catch(e2){} return;}
+    try{
+      const file=new File([blob],name,{type:blob.type||(curType==='image'?'image/jpeg':'application/pdf')});
+      if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:curTitle}); return;}
+      throw new Error('no-share');
+    }catch(e){
+      if(e&&e.name==='AbortError') return;
+      try{
+        const objUrl=URL.createObjectURL(blob);
+        const a=document.createElement('a'); a.href=objUrl; a.download=name; a.style.display='none';
+        document.body.appendChild(a); a.click();
+        setTimeout(()=>{try{document.body.removeChild(a);}catch(e3){} URL.revokeObjectURL(objUrl);},4000);
+      }catch(e2){try{window.open(curUrl,'_blank');}catch(e3){}}
+    }
+  }
+  closeBtn.addEventListener('click',close);
+  shareBtn.addEventListener('click',share);
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&el.classList.contains('on'))close();});
+  // 背景タップで閉じる(画像のみ。PDF の iframe はバーのボタンのみ)
+  el.addEventListener('click',e=>{if(curType==='image'&&e.target===el)close();});
+  // 上部バーで始まった右スワイプで閉じる(#pages のページャと干渉しないよう、バー内で始まった時だけ)
+  let tsx=null,tsy=null,onBar=false;
+  bar.addEventListener('touchstart',e=>{const t=e.changedTouches[0]; tsx=t.clientX; tsy=t.clientY; onBar=true;},{passive:true});
+  bar.addEventListener('touchend',e=>{if(!onBar)return; onBar=false; const t=e.changedTouches[0]; const dx=t.clientX-tsx, dy=t.clientY-tsy; if(dx>80&&Math.abs(dy)<60)close();},{passive:true});
+  return {open,close};
+})();
+TP.openBlob=window.tpBlob.open;   // room(vault等)向けの別名。実体は window.tpBlob と同じ(docs 等は window.tpBlob のまま使う)
+
+// ================= 絵 =================
+const cv=document.getElementById('c'), ctx=cv.getContext('2d'); let W=0,H=0;
+function resize(){const pr=cv.parentElement; const cs=getComputedStyle(pr); cv.style.width=pr.clientWidth+'px'; cv.style.height=(pr.clientHeight-parseFloat(cs.paddingTop)-parseFloat(cs.paddingBottom))+'px'; const r=cv.getBoundingClientRect();const D=Math.min(devicePixelRatio||1,2);W=r.width;H=r.height;cv.width=W*D;cv.height=H*D;ctx.setTransform(D,0,0,D,0,0);}
+addEventListener('resize',resize);resize();
+// 画面外(可視率0)や非表示タブでは frame() の描画本体をスキップ
+let cvVisible=true;
+try{new IntersectionObserver(es=>{cvVisible=es[0].intersectionRatio>0;},{threshold:[0]}).observe(cv);}catch(e){}
+// ホーム画面に戻った・スレを閉じた・タブが前面に来た、など確実に見えているはずのタイミングで
+// 呼べば、可視フラグとキャンバスの実測寸法を強制的に直し、ループが死んでいれば再開する
+let rafHandle=null;
+function ensureAnimating(){
+  cvVisible=true; lastRectCheck=0; try{resize();}catch(e){}
+  if(rafHandle==null) rafHandle=requestAnimationFrame(frame);
+}
+window.tpEnsureAnimating=ensureAnimating;
+const PART_MAX=(navigator.hardwareConcurrency<=4||devicePixelRatio>=3)?120:240;
+let lastRectCheck=0;
+const P=new Uint8Array(512);{const p=[...Array(256).keys()];for(let i=255;i>0;i--){const j=(Math.random()*(i+1))|0;[p[i],p[j]]=[p[j],p[i]];}for(let i=0;i<512;i++)P[i]=p[i&255];}
+const fade=t=>t*t*t*(t*(t*6-15)+10), lerp=(t,a,b)=>a+t*(b-a);
+function grad(h,x,y){switch(h&3){case 0:return x+y;case 1:return -x+y;case 2:return x-y;default:return -x-y}}
+function noise(x,y){const X=Math.floor(x)&255,Y=Math.floor(y)&255;x-=Math.floor(x);y-=Math.floor(y);const u=fade(x),v=fade(y),a=P[X]+Y,b=P[X+1]+Y;
+  return lerp(v,lerp(u,grad(P[a],x,y),grad(P[b],x-1,y)),lerp(u,grad(P[a+1],x,y-1),grad(P[b+1],x-1,y-1)));}
+const parts=[]; function ensureParts(n){while(parts.length<n)parts.push({x:Math.random()*W,y:Math.random()*H,l:Math.random()});while(parts.length>n)parts.pop();}
+let t0=performance.now(), beat=0;
+function frame(now){
+  __tp.frames++;
+  try{ frameBody(now); }catch(e){ __tp.errors.push('frame: '+e.message); }
+  rafHandle=requestAnimationFrame(frame);
+}
+function frameBody(now){
+  if(!cvVisible||document.hidden){t0=now;return;}
+  if(now-lastRectCheck>=500){lastRectCheck=now; const pr=cv.parentElement, cs=getComputedStyle(pr); const ih=pr.clientHeight-parseFloat(cs.paddingTop)-parseFloat(cs.paddingBottom); const r=cv.getBoundingClientRect(); if(Math.abs(pr.clientWidth-W)>1||Math.abs(ih-H)>1||Math.abs(r.width-W)>1||Math.abs(r.height-H)>1) resize();}
+  const dt=Math.min(0.05,(now-t0)/1000); t0=now; const T=now/1000;
+  for(const k in target) view[k]+=(target[k]-view[k])*Math.min(1,dt*1.5);
+  const hr=new Date().getHours()+new Date().getMinutes()/60, day=0.5-0.5*Math.cos((hr-4)/24*Math.PI*2);
+  const hue=lerp(day,235,185), hue2=lerp(day,280,40);
+  if(W<40||H<40){return;}   // 折りたたみの途中など、極端に小さい間は描かない(負の半径で例外になる)
+  const nS=Math.max(1,sessions.length); const cx=W/2, cy=H/2, R=Math.max(8,Math.min(Math.min(W,H)*0.27,(H/2-26)/(1.05+0.38*(nS-1)),(W/2-70)/(1.05+0.38*(nS-1))));   // ラベル分の余白を横にも確保
+  ctx.fillStyle=`hsl(${hue} 45% 5%)`; ctx.fillRect(0,0,W,H);
+  // 粒子(プロセス数)
+  ensureParts(Math.min(PART_MAX,Math.round(view.procs*2.5))); const sp=10+view.load*60;
+  ctx.fillStyle=`hsla(${hue} 80% 80% / .35)`;
+  for(const p of parts){const a=noise(p.x*0.003+T*0.05,p.y*0.003)*Math.PI*2;p.x+=Math.cos(a)*sp*dt;p.y+=Math.sin(a)*sp*dt;
+    if(p.x<0)p.x+=W;if(p.x>W)p.x-=W;if(p.y<0)p.y+=H;if(p.y>H)p.y-=H;ctx.globalAlpha=0.25+0.5*p.l;ctx.fillRect(p.x,p.y,1.2,1.2);}
+  ctx.globalAlpha=1;
+  // 年輪(稼働6時間ごと)
+  const rings=Math.min(60,Math.floor(view.uptime/21600)); ctx.lineWidth=1;
+  for(let i=1;i<=rings;i++){const rr=R*1.15+i*Math.max(3,(Math.min(W,H)/2-R*1.2)/62);ctx.strokeStyle=`hsla(${hue} 60% 70% / ${0.05+0.05*(i%4===0)})`;ctx.beginPath();ctx.arc(cx,cy,rr,0,Math.PI*2);ctx.stroke();}
+  // 心臓: 全セッションの状態で色と鼓動が変わる。停止/エラー=赤(ゆっくり) > 入力待ち=紫(二拍) > 作業中=黄(鼓動) > 全て待機=緑(静止)
+  const agg=sessions.some(s=>s.state==='dead')?'dead':sessions.some(s=>['approval','trust','choice','login'].includes(s.state))?'need':sessions.some(s=>s.state==='working')?'working':'idle';
+  const heartHue={idle:150,working:45,need:290,dead:0}[agg];
+  let pulse=0;
+  if(agg==='working'){const bpm=48+view.load*40; beat+=dt*bpm/60; pulse=Math.pow(Math.max(0,Math.sin(beat*Math.PI*2)),6);}
+  else if(agg==='need'){beat+=dt*1.6; const ph=beat%1; pulse=Math.pow(Math.max(0,Math.sin(ph*Math.PI*2)),8)*(ph<0.5?1:0.55);}
+  else if(agg==='dead'){beat+=dt*0.35; pulse=0.5+0.5*Math.sin(beat*Math.PI*2);}
+  else {beat=0;}
+  const core=Math.max(4,R*(0.45+view.mem/100*0.5)*(1+pulse*0.08)), rough=agg==='idle'?view.cpu/300:view.cpu/100; coreR=core;
+  const g=ctx.createRadialGradient(cx,cy,core*0.2,cx,cy,core*2.2); g.addColorStop(0,`hsla(${heartHue} 90% 60% / ${(agg==='idle'?0.22:0.32)+pulse*0.28})`); g.addColorStop(1,'transparent');
+  ctx.fillStyle=g; ctx.beginPath(); ctx.arc(cx,cy,core*2.2,0,Math.PI*2); ctx.fill();
+  for(let layer=0;layer<3;layer++){ctx.beginPath();
+    for(let i=0;i<=180;i++){const a=i/180*Math.PI*2,n=noise(Math.cos(a)*1.6+layer*7+T*0.4,Math.sin(a)*1.6+T*0.3),rr=core*(1+layer*0.12)*(1+n*(0.05+rough*0.35));const x=cx+Math.cos(a)*rr,y=cy+Math.sin(a)*rr;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}
+    ctx.closePath(); ctx.strokeStyle=`hsla(${heartHue} 85% ${72-layer*12}% / ${0.6-layer*0.15})`; ctx.lineWidth=1.5-layer*0.4; ctx.stroke();
+    if(layer===0){ctx.fillStyle=`hsla(${heartHue} 80% 50% / ${0.14+pulse*0.12})`;ctx.fill();}}
+  // 中心の文字は出さない(2026-09-22)。ここは中核(heart)で、セッションの Main とは別物。
+  // 惑星のタップで Main を開く動作が無くなったあとは何も指しておらず、軌道上の Main の
+  // 名札と同じ語が2つ並んで「二重に見える」と指摘があった。中核は金色で見分けが付く。
+  // 惑星(セッション): 軌道=順番, 大きさ=生存時間, 光=CPU時間の割合, 色=状態
+  const totalCpu=sessions.reduce((s,x)=>s+x.cpu_s,0)||1;
+  const stCol={idle:'150 80% 70%',working:'45 100% 70%',approval:'350 100% 70%',trust:'350 100% 70%',choice:'350 100% 70%',login:'350 100% 70%',typed:'215 100% 80%',dead:'230 10% 45%',unknown:'230 10% 60%'};
+  sessions.forEach((s,i)=>{const orbit=R*1.05+i*R*0.38; s.ang+=dt*(0.12+view.load*0.2)/(1+i*0.6);
+    // 2026-09-26: 2日ほど動いたスレで直径25px になり、丸どうし・名札と重なっていたので6割に
+    const size=Math.max(2,(s.pid?4+Math.log10(1+s.age_s/60)*2.4:3)*0.6); s.plSize=size; s.glow+=(s.cpu_s/totalCpu-s.glow)*dt; const col=stCol[s.state]||stCol.unknown;
+    ctx.strokeStyle=`hsla(${hue} 70% 80% / .12)`; ctx.lineWidth=1; ctx.beginPath(); ctx.arc(cx,cy,orbit,0,Math.PI*2); ctx.stroke();
+    const x=cx+Math.cos(s.ang)*orbit, y=cy+Math.sin(s.ang)*orbit; s.px=x; s.py=y;
+    ctx.beginPath(); for(let k=0;k<40;k++){const a=s.ang-k*0.012*(1+view.load),px=cx+Math.cos(a)*orbit,py=cy+Math.sin(a)*orbit;k?ctx.lineTo(px,py):ctx.moveTo(px,py);}
+    ctx.strokeStyle=`hsla(${col} / ${0.15+s.glow*0.5})`; ctx.lineWidth=size*0.5; ctx.lineCap='round'; ctx.stroke();
+    const pg=ctx.createRadialGradient(x,y,0,x,y,size*3); pg.addColorStop(0,`hsla(${col} / ${0.35+s.glow*0.4})`); pg.addColorStop(1,'transparent');   // 光のにじみも控えめに(9/26)
+    ctx.fillStyle=pg; ctx.beginPath(); ctx.arc(x,y,size*3,0,Math.PI*2); ctx.fill();
+    // 衛星 = 実行中のサブエージェント。水平の細い楕円(9/25: 斜め→水平・控えめな大きさ)で、奥側を通るときは惑星の後ろに隠れる
+    const ag=(s.agents||[]).length, tilt=0, sats=[];
+    for(let k=0;k<ag;k++){const a=T*2.6+k*(Math.PI*2/ag)+i; const rr=size*2.8+k*3; const ex=Math.cos(a)*rr, ey=Math.sin(a)*rr*0.32;
+      const mx=x+ex*Math.cos(tilt)-ey*Math.sin(tilt), my=y+ex*Math.sin(tilt)+ey*Math.cos(tilt); sats.push({mx,my,back:Math.sin(a)<0,depth:Math.sin(a)});}
+    if(ag){ctx.save(); ctx.translate(x,y); ctx.rotate(tilt); ctx.strokeStyle='hsla(45 100% 70% / .3)'; ctx.lineWidth=1; for(let k=0;k<ag;k++){const rr=size*2.8+k*3; ctx.beginPath(); ctx.ellipse(0,0,rr,rr*0.32,0,0,Math.PI*2); ctx.stroke();} ctx.restore();}
+    // 2026-09-25: 半径2px では惑星(9/22 に大きくした)に埋もれて「衛星が一度も見えない」と言われたので、点と光を大きく
+    const drawSat=(q)=>{const r=Math.max(3,size*0.32)+q.depth*0.6, gr=r*3.4; const sg=ctx.createRadialGradient(q.mx,q.my,0,q.mx,q.my,gr); sg.addColorStop(0,'hsla(45 100% 70% / .8)'); sg.addColorStop(1,'transparent'); ctx.fillStyle=sg; ctx.beginPath(); ctx.arc(q.mx,q.my,gr,0,Math.PI*2); ctx.fill(); ctx.fillStyle=`hsl(45 100% ${68+q.depth*8}%)`; ctx.beginPath(); ctx.arc(q.mx,q.my,r,0,Math.PI*2); ctx.fill();};
+    sats.filter(q=>q.back).forEach(drawSat);
+    ctx.fillStyle=s.pid?'#fff':'#667'; ctx.beginPath(); ctx.arc(x,y,size,0,Math.PI*2); ctx.fill();
+    sats.filter(q=>!q.back).forEach(drawSat);
+    });
+  // 軌道上の名札(スレ名): 2026-09-22に復活(惑星が大きく間隔も空いたため)。惑星・軌道・衛星の計算は
+  // 一切変えず、位置(px,py)と大きさ(plSize)を読むだけ。既定は右、重なるなら左→上→下の順に試し、
+  // どこに置いても重なるならそのスレの名札は描かない(潰れた文字を出すより良い)
+  {
+    ctx.font='11px -apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif';
+    ctx.textBaseline='middle';
+    const placed=[{x:cx-14,y:cy+4-7,w:28,h:14}];   // 中心の "Main" 表示と重ならないよう先に確保
+    // 惑星の丸も先に確保する(9/26): 名札どうしだけ避けていたので、白い丸の上に白い字が乗って読めなかった
+    for(const s of sessions){ if(s.px==null||s.py==null) continue; const r=(s.plSize||4)+2; placed.push({x:s.px-r,y:s.py-r,w:r*2,h:r*2}); }
+    { const hr=(coreR||20)*1.15; placed.push({x:cx-hr,y:cy-hr,w:hr*2,h:hr*2}); }   // 中心の心臓(金色の円)にも名札を乗せない
+    for(const s of sessions){
+      if(s.px==null||s.py==null) continue;
+      const text=(s.name||'').trim(); if(!text) continue;
+      const size=s.plSize||4;
+      ctx.font='11px -apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP",sans-serif';
+      const tw=ctx.measureText(text).width, boxH=14, pad=4, gap=Math.max(14,size*2.6);
+      const tries=[
+        {x:s.px+gap, y:s.py, align:'left'},    // 右(既定)
+        {x:s.px-gap, y:s.py, align:'right'},   // 左
+        {x:s.px, y:s.py-gap, align:'center'},  // 上
+        {x:s.px, y:s.py+gap, align:'center'},  // 下
+      ];
+      let done=false;
+      for(const c of tries){
+        let rx; if(c.align==='left') rx=c.x; else if(c.align==='right') rx=c.x-tw; else rx=c.x-tw/2;
+        const rect={x:rx-pad, y:c.y-boxH/2, w:tw+pad*2, h:boxH};
+        if(rect.x<2||rect.y<2||rect.x+rect.w>W-2||rect.y+rect.h>H-2) continue;   // 端からはみ出す位置は不可
+        if(placed.some(p=>rect.x<p.x+p.w&&p.x<rect.x+rect.w&&rect.y<p.y+p.h&&p.y<rect.y+rect.h)) continue;   // 既存の名札と重なるなら不可
+        placed.push(rect);
+        ctx.fillStyle='hsla(0 0% 100% / .82)'; ctx.textAlign=c.align; ctx.fillText(text, c.x, c.y);
+        done=true; break;
+      }
+      // done===false: どこに置いても重なる/はみ出すので、この名札は描かない
+    }
+  }
+  // Tailscale 端末の点(右下)は2026-09-22の作り直しで撤去。ラベルが無くページャーの点と
+  // 見分けが付かず、「それ以外の要素は画面に置かない」に反するため(peers 変数自体は他で未使用)
+  }
+rafHandle=requestAnimationFrame(frame);
+// 描画ループが例外で止まったら 2 秒後に再開(ページ全体は生かす)。二重ループにならないよう rafHandle を経由する
+setInterval(()=>{const f=__tp.frames; setTimeout(()=>{if(__tp.frames===f&&!document.hidden){__tp.errors.push('frame loop stalled, restart'); rafHandle=null; try{ensureAnimating();}catch(e){}}},1500);},4000);
+// スレを閉じた・タブが前面に来た・bfcache から復元された、のいずれでも絵を確実に再開させる
+document.addEventListener('visibilitychange',()=>{if(!document.hidden) ensureAnimating();});
+addEventListener('pageshow',()=>ensureAnimating());
+// デバッグ: タイトルを3回タップで状態を表示
+let taps=0,tapT=0; document.getElementById('homeTtl').addEventListener('click',e=>{if(e.target.tagName==='SPAN'&&e.target.id!=='up')return; const n=Date.now(); taps=(n-tapT<600)?taps+1:1; tapT=n; if(taps>=3){taps=0;
+  const r=cv.getBoundingClientRect();
+  alert(`frames ${__tp.frames}\ncanvas ${cv.width}x${cv.height} css ${r.width.toFixed(0)}x${r.height.toFixed(0)} @${r.top.toFixed(0)}\nW/H ${W}x${H} dpr ${devicePixelRatio}\npulse ${pulseEl.clientWidth}x${pulseEl.clientHeight}\nsessions ${sessions.length} standalone=${matchMedia('(display-mode: standalone)').matches}\nerrors: ${__tp.errors.slice(-3).join(' / ')||'none'}`);}});
+
+// ================= スレ→ホームの戻るスワイプ(指に追従・2026-09-22 指追従版) =================
+// 除外ロジック(noSwipe/swipeOverlayOpen)は /plan /workout /note の3ページと揃えてある。
+// ホーム側の左右スワイプ(/plan への移動)は同日の判断で撤去。⋯メニューから行けるため。
+(function(){
+var sx=0, sy=0, st=0, ok=false;      // touchstart 開始点・時刻・対象内かどうか
+var deciding=false;                   // 方向未確定(最初の touchmove 待ち)
+var dragging=false;                   // 横ジェスチャとして確定し、指に追従中
+var curDx=0, SWW=0, pts=[];
+function noSwipe(el){
+  for (var n = el; n && n !== document.body; n = n.parentElement) {
+    if (n.matches && n.matches('textarea,input,select,[data-noswipe]')) return true;
+    var ov = getComputedStyle(n).overflowX;
+    if ((ov === 'auto' || ov === 'scroll') && n.scrollWidth > n.clientWidth) return true;
+  }
+  return false;
+}
+// .tp-overlay は全画面オーバーレイの共通印(#blobview に付けてある。vault の #files は home.js が
+// 自分で作るときに同じクラスを付ける)。room が全画面オーバーレイを足すときはこのクラスを付けるだけでよい。
+function swipeOverlayOpen(){return !!document.querySelector('.menu.on, #confirm.on, .tp-overlay.on');}
+// 本文を範囲選択しているか(2026-09-22)。iOS の選択ハンドルは**ネイティブ部品で DOM 要素ではない**ため、
+// ハンドルを掴んで動かしても e.target は下のテキストの要素になり、noSwipe() の除外をすり抜ける。
+// 結果、選択範囲を広げようとするたびにスレが滑っていた(実機スクショ IMG_5842)。
+// 始動時だけでなく touchmove の途中でも見る。長押し→選択に入る流れがあり、始動時は空のことがある。
+function hasSelection(){
+  try { var s = window.getSelection(); return !!s && !s.isCollapsed && String(s).length > 0; }
+  catch (e) { return false; }
+}
+function velocity(){   // 直近の touchmove から px/ms を求める(pts は最大5点、古いものから捨てる)
+  if (pts.length < 2) return 0;
+  var a = pts[0], b = pts[pts.length-1], dt = b.t - a.t;
+  return dt > 0 ? (b.x - a.x) / dt : 0;
+}
+function beginDrag(){
+  dragging = true;
+  threadEl.style.transition = 'none';
+  homeEl.style.display = 'flex';   // ドラッグ中だけホームを裏に見せる
+  homeEl.style.zIndex = '0';
+  threadEl.style.zIndex = '1';
+  // スライド中はホーム側の入力欄を出さない(2026-09-22)。出すと、正しく戻るときも毎回
+  // 「Main へ」と「Main に送る」が並んで見え、どちらに送られるか分からなくなる。
+  // 「入力欄は同時に1つ」は最初に決めた原則なので、遷移中も守る。
+  if (composeEl) composeEl.style.visibility = 'hidden';
+}
+function applyDrag(dx){
+  curDx = dx;
+  var shown = dx >= 0 ? dx : dx * 0.2;          // 左(戻る方向でない)は強いラバーバンド
+  if (shown > SWW) shown = SWW + (shown - SWW) * 0.2;   // 右も画面幅を超えたら抵抗
+  threadEl.style.transform = 'translateX(' + shown + 'px)';
+}
+function finishDrag(commit){
+  threadEl.style.transition = 'transform .22s cubic-bezier(.2,.7,.3,1)';
+  threadEl.style.transform = 'translateX(' + (commit ? '100%' : '0') + ')';
+  var done = false;
+  function cleanup(){
+    if (done) return; done = true;
+    threadEl.removeEventListener('transitionend', onEnd);
+    threadEl.style.transition = '';
+    threadEl.style.transform = '';
+    threadEl.style.zIndex = '';
+    homeEl.style.display = '';
+    homeEl.style.zIndex = '';
+    if (composeEl) composeEl.style.visibility = '';
+    if (commit) closeThread();
+  }
+  function onEnd(ev){ if (ev.target === threadEl && ev.propertyName === 'transform') cleanup(); }
+  threadEl.addEventListener('transitionend', onEnd);
+  setTimeout(cleanup, 320);   // transitionend が来ない場合の保険
+}
+document.addEventListener('touchstart', function(e){
+  // スレが開いているときだけ武装する(ホームでは何もしない=左右どちらに払っても無反応)
+  ok = e.touches.length === 1 && threadEl.classList.contains('on') && !swipeOverlayOpen()
+       && !hasSelection() && !noSwipe(e.target);
+  dragging = false; deciding = false; curDx = 0; pts = [];
+  if (!ok) return;
+  sx = e.touches[0].clientX; sy = e.touches[0].clientY; st = Date.now();
+  deciding = true; SWW = innerWidth; pts = [{x: sx, t: st}];
+}, {passive:true});
+document.addEventListener('touchmove', function(e){
+  if (!ok) return;
+  var t = e.touches && e.touches[0]; if (!t) return;
+  var dx = t.clientX - sx, dy = t.clientY - sy;
+  if (deciding){
+    if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)){
+      deciding = false; beginDrag();
+    } else if (Math.abs(dy) > 10 && Math.abs(dy) >= Math.abs(dx)){
+      // 縦が先に勝った: このジェスチャは捨てる(会話の縦スクロールを邪魔しない)
+      deciding = false; ok = false; return;
+    } else {
+      return;   // まだ判定できない
+    }
+  }
+  if (!dragging) return;
+  // 途中で選択が始まったら取り消して元の位置に戻す(長押し→選択の流れは始動時には空なので、
+  // touchstart の判定だけでは足りない)
+  if (hasSelection()){ ok = false; dragging = false; finishDrag(false); return; }
+  e.preventDefault();
+  applyDrag(dx);
+  pts.push({x: t.clientX, t: Date.now()});
+  while (pts.length > 5) pts.shift();
+}, {passive:false});
+document.addEventListener('touchend', function(e){
+  if (!ok) return; ok = false; deciding = false;
+  if (!dragging) return;
+  dragging = false;
+  var t = e.changedTouches && e.changedTouches[0];
+  var dx = t ? (t.clientX - sx) : curDx;
+  var vx = velocity();
+  var commit = dx > SWW * 0.35 || (vx > 0.5 && dx > 20);
+  finishDrag(commit);
+}, {passive:true});
+document.addEventListener('touchcancel', function(){
+  ok = false; deciding = false;
+  if (dragging){ dragging = false; finishDrag(false); }
+}, {passive:true});
+})();
+})();
+</script>
+</body>
+</html>

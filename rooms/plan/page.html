@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#070a14">
+<link rel="manifest" href="/manifest.json">
+<title>ポケクル · plan</title>
+<style>
+  /* --c-green/.dot-green: tab で差し込む room(数字など)が使う色の点(2026-09-26 名前を一般名に) */
+  :root{--bg:#070a14;--card:#0e1326;--line:#1b2340;--fg:#e8ecf5;--sub:#a9b3cc;--dim:#8892b0;--acc:#5aa0ff;--ok:#5fe0b0;--busy:#ffd166;--warn:#ff6b7a;--c-note:#3987e5;--c-x:#d95926;--c-green:#199e70;
+    --fs-body:16px;--fs-sub:13px;--fs-small:12px;--fs-title:18px;--fs-h1:22px;--lh:1.6;
+    --font-ui:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Noto Sans JP',sans-serif;--font-mono:Menlo,'SF Mono',ui-monospace,monospace;}
+  html,body{margin:0;background:#070a14;color:var(--fg);font-family:var(--font-ui);font-size:var(--fs-body);line-height:var(--lh)}
+  #plan-root .top{display:flex;align-items:center;gap:10px;margin:4px 2px 12px}
+  #plan-root .top a{color:var(--acc);text-decoration:none;font-size:var(--fs-body)}
+  #plan-root .top h1{font-size:var(--fs-title);margin:0;font-weight:600;flex:1}
+  #plan-root .top .d{font-size:var(--fs-sub);color:var(--dim)}
+  #plan-root .tabs{position:relative;display:flex;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:3px;margin-bottom:14px}
+  #plan-root .tabs .hl{position:absolute;top:3px;bottom:3px;left:3px;width:calc((100% - 6px)/5);background:#182552;border:1px solid var(--acc);border-radius:9px;transition:transform .2s ease;z-index:0}
+  #plan-root .tabs button{position:relative;z-index:1;flex:1;background:transparent;color:var(--dim);border:0;border-radius:9px;padding:12px 0;font-size:var(--fs-sub);min-height:44px}
+  #plan-root .tabs button.on{color:#fff}
+  #plan-root section{display:none}
+  #plan-root section.on{display:block}
+  #plan-root .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:10px}
+  #plan-root h2{font-size:var(--fs-sub);color:var(--dim);margin:14px 4px 6px;font-weight:600;letter-spacing:.06em}
+  #plan-root .goal-card{display:flex;gap:12px;align-items:flex-start;cursor:pointer}
+  #plan-root .goal-card .ring{flex:none}
+  #plan-root .goal-card .gbody{flex:1;min-width:0}
+  #plan-root .goal-card .gt{font-size:var(--fs-body);font-weight:600;margin-bottom:6px}
+  #plan-root .goal-card .gmemo{margin-top:8px;font-size:var(--fs-sub);color:var(--sub);line-height:var(--lh)}
+  #plan-root .kv{font-size:var(--fs-sub);color:var(--sub);line-height:var(--lh)}
+  #plan-root .kv b{color:var(--fg);font-weight:500}
+  #plan-root .task{display:flex;gap:10px;align-items:flex-start;padding:10px 0;border-bottom:1px solid var(--line);font-size:var(--fs-body);line-height:var(--lh);min-height:44px;box-sizing:border-box}
+  #plan-root .task:last-child{border-bottom:0}
+  #plan-root .task .cb{width:32px;height:32px;border-radius:8px;border:1.5px solid var(--dim);flex:none;margin-top:-2px;display:flex;align-items:center;justify-content:center;font-size:16px;color:#fff}
+  #plan-root .task.done .cb{background:var(--ok);border-color:var(--ok);color:#06251c}
+  #plan-root .task.done .tx{color:var(--dim);text-decoration:line-through}
+  #plan-root .task .tx{flex:1;min-width:0}
+  #plan-root .meta{font-size:var(--fs-small);color:var(--dim);margin-top:2px}
+  #plan-root .chip{display:inline-block;font-size:var(--fs-small);padding:3px 8px;border-radius:20px;background:#131a33;color:var(--dim);margin-right:6px}
+  #plan-root .chip.warn{color:var(--warn);background:rgba(255,107,122,.14)}
+  #plan-root .chip.who{margin-left:8px;margin-right:0}
+  #plan-root .pill{display:inline-block;font-size:var(--fs-small);padding:2px 8px;border-radius:20px;margin-left:8px;font-weight:600;vertical-align:middle}
+  #plan-root .pill.warn{color:var(--warn);background:rgba(255,107,122,.14)}
+  #plan-root .pill.busy{color:var(--busy);background:rgba(255,209,102,.14)}
+  #plan-root .pill.ok{color:var(--ok);background:rgba(95,224,176,.14)}
+  #plan-root .pill.dim{color:var(--dim);background:rgba(111,122,153,.14)}
+  #plan-root .today-date{font-size:26px;font-weight:700;margin:6px 4px 2px}
+  #plan-root .today-chips{margin:0 4px 12px}
+  #plan-root .dategrp{margin-bottom:2px}
+  #plan-root .dategrp-h{font-size:var(--fs-sub);color:var(--dim);padding:10px 4px 6px;font-weight:600}
+  #plan-root .dategrp-h.today{color:var(--ok);border-left:3px solid var(--ok);padding-left:9px;margin-left:-2px}
+  #plan-root .dategrp-h.warn{color:var(--warn)}
+  #plan-root .ev-row{padding:9px 4px;border-bottom:1px solid var(--line);font-size:var(--fs-body);line-height:var(--lh)}
+  #plan-root .card .ev-row:last-child,#plan-root .dategrp .ev-row:last-child{border-bottom:0}
+  #plan-root .ev-row .tm{font-size:var(--fs-small);color:var(--dim);margin-right:8px}
+  #plan-root .ev-row .rp{opacity:.7}
+  #plan-root .rpicon{opacity:.6;margin-left:5px;font-size:var(--fs-small)}
+  #plan-root details{margin-top:6px}
+  #plan-root details summary{font-size:var(--fs-sub);color:var(--dim);padding:10px 4px;cursor:pointer;min-height:44px;box-sizing:border-box;display:flex;align-items:center}
+  #plan-root .proj-card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:10px}
+  #plan-root .proj-hd{display:flex;justify-content:space-between;align-items:baseline;font-size:var(--fs-body);font-weight:600}
+  #plan-root .proj-hd .cnt{font-size:var(--fs-small);color:var(--dim);font-weight:400}
+  #plan-root .progress{height:5px;background:#131a33;border-radius:3px;overflow:hidden;margin:8px 0 2px}
+  #plan-root .progress i{display:block;height:100%;background:var(--acc)}
+  #plan-root .logrow{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
+  #plan-root .logrow:last-child{border-bottom:0}
+  #plan-root .logrow .dt{width:48px;flex:none;font-size:var(--fs-small);color:var(--dim);border-right:1px solid var(--line);padding-right:8px}
+  #plan-root .logrow .ev{flex:1;font-size:var(--fs-sub);color:var(--sub);line-height:var(--lh)}
+  #plan-root .none{color:var(--sub);font-size:var(--fs-sub);padding:8px 4px}
+  #plan-root .hint{font-size:var(--fs-sub);color:var(--sub);margin:10px 4px;line-height:var(--lh)}
+  #plan-root{font-family:var(--font-ui);padding:calc(10px + env(safe-area-inset-top)) 12px calc(30px + env(safe-area-inset-bottom))}
+  #plan-root .mdlite{font-size:var(--fs-sub);color:var(--sub);line-height:var(--lh)}
+  #plan-root .mdlite h2{font-size:var(--fs-body);color:var(--fg);margin:14px 0 6px;border-bottom:1px solid var(--line);padding-bottom:4px}
+  #plan-root .mdlite h3{font-size:var(--fs-sub);color:#9ec1ff;margin:12px 0 4px}
+  #plan-root .mdlite ul{padding-left:20px;margin:6px 0}
+  #plan-root .mdlite code{font-family:var(--font-mono);font-size:var(--fs-small);background:#131a33;padding:1px 5px;border-radius:5px}
+  #plan-root .tbl{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:6px 0}
+  #plan-root .tbl table{border-collapse:collapse;font-size:14px;width:100%}
+  #plan-root .tbl th,#plan-root .tbl td{border:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top;min-width:70px;white-space:normal;line-height:var(--lh)}
+  #plan-root .tbl th{color:#9ec1ff;background:#0b1020;white-space:normal}
+  #plan-root .tbl td.num{font-variant-numeric:tabular-nums;text-align:right}
+  #plan-root .hero-card .hero-title{font-size:var(--fs-sub);color:var(--dim);letter-spacing:.05em;cursor:pointer}
+  #plan-root .hero-num{font-size:48px;font-weight:700;color:var(--fg);line-height:1.1;margin:2px 0 12px}
+  #plan-root .dot-green{display:inline-block;width:7px;height:7px;border-radius:2px;background:var(--c-green);margin-left:6px;vertical-align:middle}
+  #plan-root .tiles3{display:flex;gap:8px}
+  #plan-root .tile{flex:1;background:#0b1020;border:1px solid var(--line);border-radius:10px;padding:8px 6px;text-align:center}
+  #plan-root .tile.tap{cursor:pointer}
+  #plan-root .tile.sel{border-color:var(--acc)}
+  #plan-root .tn{font-size:18px;font-weight:700}
+  #plan-root .tl{font-size:var(--fs-small);color:var(--dim);margin-top:3px;line-height:1.4}
+  #plan-root .fineprint{font-size:var(--fs-sub);color:var(--sub);margin-top:10px;line-height:var(--lh)}
+  #plan-root .expand{margin-top:10px;padding-top:10px;border-top:1px solid var(--line);font-size:var(--fs-sub);color:var(--sub);line-height:var(--lh)}
+  #plan-root .hypo-card{cursor:pointer}
+  #plan-root .hypo-hd{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+  #plan-root .hypo-t{font-size:var(--fs-body);font-weight:600;flex:1}
+  #plan-root .hypo-period{font-size:var(--fs-small);color:var(--dim);margin-top:6px}
+  #plan-root .stat3{display:flex;gap:8px;margin-bottom:12px}
+  #plan-root .stat{flex:1;text-align:center}
+  #plan-root .sv{font-size:18px;font-weight:700}
+  #plan-root .sl{font-size:var(--fs-small);color:var(--dim);margin-top:2px}
+  #plan-root .delta{font-size:var(--fs-small);font-weight:600;margin-left:4px}
+  #plan-root .delta.ok{color:var(--ok)}
+  #plan-root .delta.warn{color:var(--warn)}
+  #plan-root .delta.dim{color:var(--dim)}
+  #plan-root .chart-wrap svg{display:block}
+  #plan-root .chart-wrap .hit{cursor:pointer}
+  #plan-root .chart-wrap .hit.sel{fill:rgba(255,255,255,.03)}
+  #plan-root .readout{font-size:var(--fs-sub);color:var(--fg);background:#0b1020;border-radius:10px;padding:9px 10px;margin-top:6px;min-height:18px;line-height:var(--lh)}
+  #plan-root .bars{display:flex;flex-direction:column;gap:9px}
+  #plan-root .bar-row{display:flex;align-items:center;gap:8px;cursor:pointer}
+  #plan-root .bar-row.sel .bar-lbl{color:var(--fg)}
+  #plan-root .bar-lbl{width:104px;flex:none;font-size:var(--fs-small);color:var(--dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #plan-root .bar-track{flex:1;height:18px;background:#0b1020;border-radius:4px;overflow:hidden}
+  #plan-root .bar-fill{height:100%;background:var(--c-note);border-radius:0 4px 4px 0}
+  #plan-root .bar-row.rest .bar-fill{background:var(--dim);opacity:.7}
+  #plan-root .bar-val{width:44px;flex:none;text-align:right;font-size:var(--fs-small);color:var(--fg);font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+<div id="plan-root">
+<div class="top"><a href="/" onclick="location.replace('/');return false" class="back">← 司令室</a><h1>ダッシュボード</h1><span class="d" id="pl-date"></span></div>
+<div class="tabs"><div class="hl" id="pl-tabHl"></div><button data-t="today" class="on">今日</button><button data-t="tasks">タスク</button><button data-t="goals">ゴール</button><button data-t="log">ログ</button></div>
+<section id="pl-today" class="on">
+  <div class="today-date" id="pl-todayBig"></div>
+  <div class="today-chips" id="pl-todayChips"></div>
+  <div id="pl-todayGroups"></div>
+  <details id="pl-laterWrap" hidden><summary>その先</summary><div id="pl-laterList"></div></details>
+</section>
+<section id="pl-tasks"><div id="pl-taskList"></div><div class="hint">チェックは vault/plan/tasks.md に書き戻します。文言の追加や変更は Obsidian か、セッションに「tasks.md に○○を足して」と頼んでください。</div></section>
+<section id="pl-goals"><div id="pl-goalList"></div><div class="hint">vault/plan/goals.md。進捗は手入力(0〜100)。指標が数字で取れるものは、そのうち自動にします。</div></section>
+<section id="pl-log"><div id="pl-logList"></div><div class="hint">今日、司令室から送った指示・操作・通知(log/)。</div></section>
+</div>
+<script>
+// 左端から右へのスワイプで司令室(/)に戻る(2026-09-24)。以前は iOS 標準の「戻る」に任せていたが、
+// 司令室の中の移動で履歴を積まなくしたので、ページ側で持つ。グラフのなぞり操作とぶつからないよう
+// 左端 28px で始まったときだけ拾う。指に追従させ、画面の 1/3 か素早い払いで戻る。
+(function(){
+  var sx=0,sy=0,st=0,on=false,drag=false;
+  document.addEventListener('touchstart',function(e){
+    var t=e.touches[0]; on=e.touches.length===1&&t.clientX<28; drag=false;
+    if(on){sx=t.clientX;sy=t.clientY;st=Date.now();}
+  },{passive:true});
+  document.addEventListener('touchmove',function(e){
+    if(!on) return; var t=e.touches[0], dx=t.clientX-sx, dy=t.clientY-sy;
+    if(!drag){ if(Math.abs(dy)>12&&Math.abs(dy)>Math.abs(dx)){on=false;return;} if(dx>10) drag=true; else return; }
+    e.preventDefault(); document.body.style.transition='none'; document.body.style.transform='translateX('+Math.max(0,dx)+'px)';
+  },{passive:false});
+  document.addEventListener('touchend',function(e){
+    if(!on) return; on=false; if(!drag) return;
+    var t=e.changedTouches[0], dx=t.clientX-sx, v=dx/Math.max(1,Date.now()-st);
+    var go=dx>innerWidth/3||(v>0.5&&dx>40);
+    document.body.style.transition='transform .2s';
+    document.body.style.transform=go?'translateX(100%)':'';
+    if(go) setTimeout(function(){location.replace('/');},180);
+  },{passive:true});
+  document.addEventListener('touchcancel',function(){ if(on&&drag){document.body.style.transition='transform .2s';document.body.style.transform='';} on=false; },{passive:true});
+  addEventListener('pageshow',function(){document.body.style.transition='';document.body.style.transform='';});
+})();
+</script>
+<script src="/plan.js"></script>
+</body>
+</html>

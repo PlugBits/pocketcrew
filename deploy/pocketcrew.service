@@ -1,0 +1,13 @@
+[Unit]
+Description=Pocket Crew (pocketcrew) - phone-first command center for Claude Code
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/pocketcrew
+ExecStart=/usr/bin/python3 %h/pocketcrew/server.py
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=default.target

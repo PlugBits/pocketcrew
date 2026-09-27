@@ -1,0 +1,11 @@
+config.toml
+presets.json
+sessions.json
+push.json
+certs/
+log/
+inbox/
+outbox/
+rooms-private/
+__pycache__/
+*.bak*

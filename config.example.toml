@@ -1,0 +1,43 @@
+# ポケクルの設定。これを config.toml にコピーして書き換える(config.toml は git 管理外)。
+# パスの「~」はホームに展開。相対パスはこのリポジトリ基準。
+
+[paths]
+home = "~"                 # 新しいスレ(Claude)を開く作業ディレクトリ
+vault = "~/vault"          # メモ置き場(Obsidian の vault など)
+data_dir = "."             # sessions.json / push.json / presets.json の置き場
+log_dir = "log"
+inbox = "inbox"            # アップロードされたファイル
+cert_dir = "certs"         # HTTPS 証明書(tailscale cert で自動取得)
+# lock_dir = "log"         # 送信ロックの置き場(通常は log_dir と同じ)
+
+[server]
+bind = "127.0.0.1"         # スマホから見るなら Tailscale の IP(100.x.y.z)にする
+port = 8787
+https_port = 8443
+hostname = ""              # Tailscale の名前(例: mypc.tailXXXX.ts.net)。空なら HTTPS なし
+push_subject = "https://example.com"   # Web Push の連絡先 URL(自分のサイトなど)
+
+[tmux]
+session = "claude"         # スレ(Claude)を並べる tmux セッション名
+
+[features]
+jobs = true                # 定時ジョブ
+auto_restore = true        # 名簿(sessions.json)からスレを自動で立て直す
+push = true                # スレの状態が変わったらプッシュ通知
+
+[schedule]                 # すべてこの機械のローカル時刻
+daily = "21:30"            # 日次まとめ
+brief = "07:30"            # 朝の便り
+remind_hours = [8, 18]     # 期限リマインド
+login_check_hour = 9       # Claude ログイン期限の警告
+numbers = "07:15"
+weekly = "08:30"           # 日曜
+slot_notice = "20:00"      # 定期の予定の前日予告
+
+[vault]                    # vault からの相対パス
+plan = "plan"
+workout_log = "workout/log.md"
+daily = "daily"
+docs = "docs-inquiry"
+
+[repos]

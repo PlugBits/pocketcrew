@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#070a14">
+<title>ポケクル · workout</title>
+<style>
+  :root{--bg:#070a14;--fg:#e8ecf5;--sub:#a9b3cc;--dim:#8892b0;--card:#0e1326;--line:#1b2340;--ok:#5fe0b0;--busy:#ffd166;--warn:#ff6b7a;--dead:#556;--acc:#5aa0ff;
+    --fs-body:16px;--fs-sub:13px;--fs-small:12px;--fs-title:18px;--fs-h1:22px;--lh:1.6;
+    --font-ui:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Noto Sans JP',sans-serif;--font-mono:Menlo,'SF Mono',ui-monospace,monospace;}
+  html,body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font-ui);font-size:var(--fs-body);line-height:var(--lh);-webkit-text-size-adjust:100%}
+  #wk-root{padding:calc(10px + env(safe-area-inset-top)) 12px calc(30px + env(safe-area-inset-bottom))}
+  #wk-root .top{display:flex;align-items:center;gap:10px;margin:4px 2px 14px}
+  #wk-root .top a{color:var(--acc);text-decoration:none;font-size:var(--fs-body);flex:none}
+  #wk-root .top h1{font-size:var(--fs-title);margin:0;font-weight:600;flex:1}
+  #wk-root .top button{background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:10px 14px;font-size:var(--fs-sub);min-height:44px}
+  #wk-root .top button:disabled{color:var(--dim);opacity:.6}
+  #wk-root h2{font-size:var(--fs-sub);color:var(--dim);margin:18px 4px 8px;font-weight:600;letter-spacing:.05em}
+  #wk-root .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:2px}
+  #wk-root .none{color:var(--sub);font-size:var(--fs-sub);padding:10px 2px}
+  #wk-root .pr-list .pr-item{display:flex;align-items:baseline;gap:8px;padding:9px 0;border-bottom:1px solid var(--line);font-size:var(--fs-body)}
+  #wk-root .pr-list .pr-item:last-child{border-bottom:0}
+  #wk-root .pr-item .d{color:var(--dim);font-size:var(--fs-small);flex:none;width:44px}
+  #wk-root .pr-item .ex{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #wk-root .pr-item .w{color:var(--ok);font-weight:600;flex:none}
+  #wk-root .pr-item .kgtxt{color:var(--dim);font-size:var(--fs-small);margin-left:3px}
+  #wk-root .ex-select-row{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+  #wk-root .ex-select{flex:1;min-width:0;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:10px;font-size:16px;min-height:44px;-webkit-appearance:none;appearance:none}
+  #wk-root .ex-nav{flex:none;width:44px;height:44px;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:10px;font-size:16px;line-height:1}
+  #wk-root .ex-nav:active{background:#131a33}
+  #wk-root .ex-list{margin-top:8px}
+  #wk-root .ex-list .ex-row{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px;font-size:var(--fs-sub);color:var(--sub);padding:8px 0;border-bottom:1px solid var(--line);line-height:var(--lh)}
+  #wk-root .ex-list .ex-row:last-child{border-bottom:0}
+  #wk-root .ex-list .wr{color:var(--fg)}
+  #wk-root .ex-list .e1{color:var(--fg);font-weight:700}
+  #wk-root .ex-list .kg2{color:var(--dim);font-size:var(--fs-small)}
+  #wk-root .ex-list .diff{font-weight:600}
+  #wk-root .ex-list .diff.ok{color:var(--ok)}
+  #wk-root .ex-list .diff.warn{color:var(--warn)}
+  #wk-root .ex-list .diff.flat{color:var(--dim)}
+  #wk-root .spark-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:8px;margin-top:10px}
+  #wk-root .spark-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:9px 10px;cursor:pointer}
+  #wk-root .spark-card:active{background:#131a33}
+  #wk-root .spark-card .nm{font-size:var(--fs-sub);color:var(--fg);margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #wk-root .spark-card .rng{font-size:var(--fs-small);color:var(--dim);margin-top:3px}
+  #wk-root .spark-card .rng b{color:var(--ok);font-weight:600}
+  #wk-root .kgtxt{color:var(--dim);font-size:var(--fs-small);margin-left:3px}
+  #wk-root .delta{font-size:var(--fs-small);font-weight:600;margin-left:4px}
+  #wk-root .delta.ok{color:var(--ok)}
+  #wk-root .delta.warn{color:var(--warn)}
+  #wk-root .freq-block{margin-bottom:14px}
+  #wk-root .freq-block:last-child{margin-bottom:0}
+  #wk-root .freq-title{font-size:var(--fs-sub);color:var(--fg);font-weight:600;margin:2px 0 6px}
+  #wk-root .freq-row{display:flex;align-items:center;gap:8px;font-size:var(--fs-sub);padding:5px 0}
+  #wk-root .freq-row .nm{width:104px;flex:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--fg)}
+  #wk-root .freq-row .bar{flex:1;height:8px;background:#131a33;border-radius:4px;overflow:hidden}
+  #wk-root .freq-row .bar i{display:block;height:100%;background:var(--acc)}
+  #wk-root .freq-row .n{width:38px;flex:none;text-align:right;color:var(--dim)}
+  #wk-root .rec{border-bottom:1px solid var(--line);padding:10px 0}
+  #wk-root .rec:last-child{border-bottom:0}
+  #wk-root .rec .hd{display:flex;align-items:baseline;gap:8px;font-size:var(--fs-body);cursor:pointer;min-height:44px}
+  #wk-root .rec .hd .d{color:var(--dim);font-size:var(--fs-small);width:70px;flex:none}
+  #wk-root .rec .hd .nm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #wk-root .rec .hd .tot{color:var(--fg);font-size:var(--fs-sub);flex:none;text-align:right}
+  #wk-root .rec .hd .tot small{color:var(--dim);font-weight:400}
+  #wk-root .rec .meta{font-size:var(--fs-small);color:var(--dim);margin-top:2px}
+  #wk-root .rec .pr-sm{color:var(--ok);margin-left:6px}
+  #wk-root .rec .ex-detail{display:none;margin-top:8px;font-size:var(--fs-sub);color:var(--sub);line-height:var(--lh)}
+  #wk-root .rec.open .ex-detail{display:block}
+  #wk-root .rec .ex-detail .exn{color:var(--fg)}
+  #wk-root .chart-wrap svg{display:block}
+  #wk-root .chart-wrap .pt{cursor:pointer}
+  #wk-root .kgnote{font-size:var(--fs-small);color:var(--dim);text-align:right;margin-top:2px}
+  #wk-root .hint{font-size:var(--fs-sub);color:var(--sub);margin:12px 4px 0;line-height:var(--lh)}
+  #wk-root .exp-note{font-size:var(--fs-sub);color:var(--sub);margin:-2px 4px 10px;line-height:var(--lh)}
+  #wk-root .kpi-tiles{display:flex;gap:8px;flex-wrap:wrap}
+  #wk-root .kpi-tile{flex:1 1 130px;min-width:118px;text-align:center;padding:6px 4px;border-radius:10px}
+  #wk-root .kpi-tile.tap{cursor:pointer}
+  #wk-root .kpi-tile.tap:active{background:#131a33}
+  #wk-root .kpi-title{font-size:var(--fs-small);color:var(--dim);margin-bottom:2px;letter-spacing:.03em}
+  #wk-root .kpi-num{font-size:28px;font-weight:700;color:var(--fg);line-height:1.15}
+  #wk-root .kpi-lbl{font-size:var(--fs-small);color:var(--dim);margin-top:2px}
+  #wk-root .kpi-empty{font-size:15px;font-weight:600;color:var(--dim);padding:9px 0 7px}
+  #wk-root .kpi-weeks{display:flex;gap:3px;justify-content:center;margin:9px auto 0;width:117px}
+  #wk-root .kpi-weeks .sq{width:12px;height:12px;border-radius:3px;border:1px solid var(--line);background:transparent;flex:none}
+  #wk-root .kpi-weeks .sq.c1{background:rgba(90,160,255,.4);border-color:transparent}
+  #wk-root .kpi-weeks .sq.c2{background:var(--acc);border-color:transparent}
+  #wk-root .kpi-weekdates{display:flex;justify-content:space-between;font-size:var(--fs-small);color:var(--dim);margin:4px auto 0;width:117px}
+</style>
+</head>
+<body>
+<div id="wk-root">
+  <div class="top">
+    <a href="/" onclick="location.replace('/');return false">← 司令室</a>
+    <h1>ワークアウト</h1>
+    <button id="wk-import" disabled>CSV を取り込む</button>
+  </div>
+
+  <h2>継続と成長</h2>
+  <div class="card kpi-card">
+    <div class="kpi-tiles">
+      <div class="kpi-tile">
+        <div class="kpi-title">今週</div>
+        <div class="kpi-num" id="wk-kpiWeekNum">–</div>
+        <div class="kpi-lbl">回</div>
+        <div class="kpi-weeks" id="wk-kpiWeeks"></div>
+        <div class="kpi-weekdates" id="wk-kpiWeekDates"></div>
+      </div>
+      <div class="kpi-tile">
+        <div class="kpi-title">連続</div>
+        <div id="wk-kpiStreakWrap"></div>
+      </div>
+      <div class="kpi-tile tap" id="wk-kpiImproved">
+        <div class="kpi-title">上がった種目</div>
+        <div class="kpi-num" id="wk-kpiImpNum">–</div>
+        <div class="kpi-lbl">推定1RM が初回より上</div>
+      </div>
+    </div>
+  </div>
+
+  <h2 id="wk-exSection">種目ごと(推定1RM)</h2>
+  <div class="exp-note">推定1RM = 重量×(1+回数/30)。回数が違う日も比べられる</div>
+  <div class="card">
+    <div class="ex-select-row">
+      <button id="wk-exPrev" class="ex-nav" type="button" aria-label="前の種目">‹</button>
+      <select id="wk-exSelect" class="ex-select"></select>
+      <button id="wk-exNext" class="ex-nav" type="button" aria-label="次の種目">›</button>
+    </div>
+    <div id="wk-exChart" class="chart-wrap"></div>
+    <div id="wk-exList" class="ex-list"></div>
+    <div id="wk-sparkGrid" class="spark-grid"></div>
+  </div>
+
+  <h2>直近の PR</h2>
+  <div class="card"><div id="wk-prList" class="pr-list"></div></div>
+
+  <h2>頻度</h2>
+  <div class="card" id="wk-freq"></div>
+
+  <h2>総重量の推移</h2>
+  <div class="card"><div id="wk-trend" class="chart-wrap"></div></div>
+
+  <h2>記録一覧</h2>
+  <div class="card" id="wk-recList"></div>
+
+  <div class="hint">原本は vault/workout/log.md。Strong の CSV は上の「CSV を取り込む」から、または `python3 rooms/workout/workout.py import-inbox` で取り込めます。</div>
+</div>
+<script>
+// 左端から右へのスワイプで司令室(/)に戻る(2026-09-24)。以前は iOS 標準の「戻る」に任せていたが、
+// 司令室の中の移動で履歴を積まなくしたので、ページ側で持つ。グラフのなぞり操作とぶつからないよう
+// 左端 28px で始まったときだけ拾う。指に追従させ、画面の 1/3 か素早い払いで戻る。
+(function(){
+  var sx=0,sy=0,st=0,on=false,drag=false;
+  document.addEventListener('touchstart',function(e){
+    var t=e.touches[0]; on=e.touches.length===1&&t.clientX<28; drag=false;
+    if(on){sx=t.clientX;sy=t.clientY;st=Date.now();}
+  },{passive:true});
+  document.addEventListener('touchmove',function(e){
+    if(!on) return; var t=e.touches[0], dx=t.clientX-sx, dy=t.clientY-sy;
+    if(!drag){ if(Math.abs(dy)>12&&Math.abs(dy)>Math.abs(dx)){on=false;return;} if(dx>10) drag=true; else return; }
+    e.preventDefault(); document.body.style.transition='none'; document.body.style.transform='translateX('+Math.max(0,dx)+'px)';
+  },{passive:false});
+  document.addEventListener('touchend',function(e){
+    if(!on) return; on=false; if(!drag) return;
+    var t=e.changedTouches[0], dx=t.clientX-sx, v=dx/Math.max(1,Date.now()-st);
+    var go=dx>innerWidth/3||(v>0.5&&dx>40);
+    document.body.style.transition='transform .2s';
+    document.body.style.transform=go?'translateX(100%)':'';
+    if(go) setTimeout(function(){location.replace('/');},180);
+  },{passive:true});
+  document.addEventListener('touchcancel',function(){ if(on&&drag){document.body.style.transition='transform .2s';document.body.style.transform='';} on=false; },{passive:true});
+  addEventListener('pageshow',function(){document.body.style.transition='';document.body.style.transform='';});
+})();
+</script>
+<script src="/workout.js"></script>
+</body>
+</html>
