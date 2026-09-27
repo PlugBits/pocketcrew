@@ -108,6 +108,31 @@ def api_img(rel):
         return mime, fh.read()
 
 
+def api_pimg(p):
+    """スレの本文に出た画像のパスを返す(2026-09-27)。~/… か絶対パスを受け、実体(symlink 解決後)が
+    C.IMAGE_ROOTS のどれかの中・隠しフォルダ(.git/.claude 等)を通らない・拒否リストの名前を通らない・
+    画像の拡張子、のときだけ返す。鍵や名簿は画像の拡張子でないので、ここからは出ない。"""
+    raw = (p or "").strip()
+    if not raw.startswith(("~/", "/")):
+        return None, "bad path"
+    real = os.path.realpath(os.path.expanduser(raw))
+    root = next((r for r in C.IMAGE_ROOTS if real == r or real.startswith(r.rstrip(os.sep) + os.sep)), None)
+    if not root:
+        return None, "not allowed"
+    parts = [x for x in os.path.relpath(real, root).split(os.sep) if x]
+    if any(x.startswith(".") or x in C.IMAGE_DENY_PARTS for x in parts):
+        return None, "not allowed"
+    mime = IMAGE_TYPES.get(os.path.splitext(real)[1].lower())
+    if not mime:
+        return None, "not an image"
+    if not os.path.isfile(real):
+        return None, "no such file"
+    if os.path.getsize(real) > MAX_IMAGE:
+        return None, "too large"
+    with open(real, "rb") as fh:
+        return mime, fh.read()
+
+
 def api_file(rel):
     f = safe_path(rel)
     if not f or not os.path.isfile(f) or os.path.splitext(f)[1].lower() not in TEXT_EXT:
@@ -487,6 +512,13 @@ class H(BaseHTTPRequestHandler):
             self._json({"rooms": [r.info() for r in rooms.ROOMS.values()], "menu": rooms.menu(), "warnings": rooms.warnings()})
         elif u.path == "/api/file":
             self._json(api_file(parse_qs(u.query).get("p", [""])[0]))
+        elif u.path == "/api/pimg":
+            # スレの本文の画像パス(2026-09-27)。/api/img と同じく画像そのものを返す
+            mime, data = api_pimg(parse_qs(u.query).get("p", [""])[0])
+            if not mime:
+                self._send(404, "text/plain; charset=utf-8", str(data).encode("utf-8"))
+            else:
+                self._send(200, mime, data, {"Cache-Control": "private, max-age=300"})
         elif u.path == "/api/img":
             # 画像(2026-09-21)。JSON ではなく画像そのものを返す(画面が <img> で開く)。
             # 長押しの保存とピンチの拡大は、img であればブラウザの標準の動きに任せられる。

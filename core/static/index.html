@@ -156,6 +156,8 @@
   .menu button.cancel{color:var(--dim);text-align:center;margin-top:6px;border-top:0;border-radius:10px;background:#131a33}
   .menu button.warn{color:var(--warn)}
   #roomWarn{font-size:var(--fs-sub);color:var(--warn);padding:2px 4px 8px}
+  a.pimg{word-break:break-all;color:#7fb0ff}
+  .pimg-th{display:block;max-width:180px;max-height:140px;margin:6px 0 4px;border-radius:8px;border:1px solid var(--line);object-fit:contain;background:#0b1020;cursor:zoom-in}
 </style>
 </head>
 <body>
@@ -905,8 +907,16 @@ function lastReply(txt){const b=parseChat(txt).filter(x=>x.role==='re'); return 
 // vault が無効/未読み込みのときは TP.linkifiers が空のままなので、パスはただの文字列として出る。
 function linkify(s){let h=esc(s)
   .replace(/(https?:\/\/[^\s<>"']+)/g,u=>{const m=u.match(/#(f|d)=([^\s]+)$/); return m?`<a href="#${m[1]}=${m[2]}">${u}</a>`:`<a href="${u}" target="_blank" rel="noopener">${u}</a>`;});
+  // 画像のパス(2026-09-27): ~/… と /home/… の .png/.jpg/.jpeg/.webp/.gif をリンク+小さなサムネに。
+  // タップで #blobview。出してよい場所はサーバーの /api/pimg が決める(許可外は 404 でサムネが消える)
+  h=h.replace(/(^|[\s(「:：])((?:~|\/home\/[\w.-]+)\/[^\s<>"'()（）」]+?\.(?:png|jpe?g|webp|gif))(?=$|[\s)）」。、,.])/gi,(m,a,p)=>{
+    const u='/api/pimg?p='+encodeURIComponent(p.replace(/&amp;/g,'&'));
+    return `${a}<a href="#" class="pimg" data-pimg="${u}">${p}</a><img class="pimg-th" src="${u}" alt="" loading="lazy" data-pimg="${u}" onerror="const a=this.previousElementSibling;if(a&&a.classList.contains('pimg'))a.replaceWith(a.textContent);this.remove()">`;});
   for(const fn of TP.linkifiers) h=fn(h);
   return h;}
+TP.linkify=linkify;   // room からもチャットと同じリンク化を使えるように(画像パスの確認にも使う)
+document.addEventListener('click',e=>{const t=e.target.closest&&e.target.closest('[data-pimg]'); if(!t) return;
+  e.preventDefault(); e.stopPropagation(); const u=t.dataset.pimg; window.tpBlob.open(u, decodeURIComponent(u.split('p=')[1]||'').split('/').pop());},true);
 function cleanFull(txt){return txt.split('\n').filter(l=>l.trim()&&!FOOT.test(l)&&!NOISE.test(l)&&!/^─+/.test(l.trim())).join('\n');}
 function mainWin(){const s=sessions.find(x=>x.name==='Main'||x.window==='main');return s?s.window:null;}
 msg.addEventListener('input',()=>{autoGrow(msg);syncComposeHeight();updateSendEnabled();});

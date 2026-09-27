@@ -19,7 +19,8 @@ let fcur = '', fmode = 'dir', fdoc = null, rawMode = false;
 function fmtTime(ts) { const d = new Date(ts * 1000); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; }
 function fmtSize(n) { return n < 1024 ? n + 'B' : n < 1048576 ? (n / 1024).toFixed(1) + 'K' : (n / 1048576).toFixed(1) + 'M'; }
 function vaultHref(path) { const rel = path.replace(/^~\/vault\//, ''); return (rel.endsWith('/') ? '#d=' : '#f=') + encodeURIComponent(rel.replace(/\/$/, '')); }
-const VAULT_PATH_RE = /(^|[\s(「])(~\/vault\/(?:[^\s<>"'()（）」]+?\.(?:md|json|csv|txt|png|jpe?g|webp)|[^\s<>"'()（）」]+\/))/g;
+// 画像(.png 等)は core の linkify がリンク+サムネにするので、ここは md・json・csv・txt とフォルダだけ(2026-09-27)
+const VAULT_PATH_RE = /(^|[\s(「])(~\/vault\/(?:[^\s<>"'()（）」]+?\.(?:md|json|csv|txt)|[^\s<>"'()（）」]+\/))/g;
 
 async function openDir(rel) {
   const j = await (await fetch('/api/vault/ls?p=' + encodeURIComponent(rel), { cache: 'no-store' })).json();

@@ -42,3 +42,9 @@ daily = "daily"
 docs = "docs-inquiry"
 
 [repos]
+
+[images]
+# スレの本文に出た画像のパス(~/… の .png など)を画面で開いてよい場所。vault・log・inbox は既定で入る。
+# 隠しフォルダ(.git/.claude 等)と deny_parts の名前を通るものは出さない。画像の拡張子だけを返す
+roots = []
+# deny_parts = ["certs", "secrets", "node_modules"]

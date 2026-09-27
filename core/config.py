@@ -49,6 +49,10 @@ VAULT = os.path.realpath(_path(get("paths", "vault", "~/vault")))
 DATA_DIR = _path(get("paths", "data_dir", "."))          # sessions.json / push.json / presets.json の置き場
 LOG_DIR = _path(get("paths", "log_dir", "log"))
 INBOX = _path(get("paths", "inbox", "inbox"))
+# スレの本文に出た画像のパスを画面で開いてよい場所(2026-09-27)。画像の拡張子だけ・隠しフォルダは不可。
+# 既定は vault・log・inbox。ほかは config.toml の [images] roots で足す(例 "~/repos")
+IMAGE_ROOTS = [os.path.realpath(r) for r in [_path(p) for p in get("images", "roots", [])] + [VAULT, LOG_DIR, INBOX]]
+IMAGE_DENY_PARTS = set(get("images", "deny_parts", ["certs", "secrets", "node_modules"]))
 CERT_DIR = _path(get("paths", "cert_dir", "certs"))
 # 送信ロック(flock)の置き場。旧版と並走する間は旧版の log を指し、同じウィンドウへの同時送信を防ぐ
 LOCK_DIR = _path(get("paths", "lock_dir", LOG_DIR))
