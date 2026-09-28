@@ -111,3 +111,24 @@ def notify(title, body, url, tag):
 from core import collect as _collect  # noqa: E402  (定義を上に置きたいので後置 import)
 
 log_action = _collect.log_action
+
+
+# ---------- node の場所(2026-09-28) ----------
+# systemd のサービスはログインシェルを通らないので、nvm の node が PATH に無い。"node" と書くと
+# 「No such file or directory: 'node'」で落ちる(定時の書き出しが 2026-09-27 から止まった)。
+# PATH にあればそれ、無ければ ~/.nvm の中で一番新しい版の node を使う(版が変わっても追従する)。
+def node_bin():
+    import glob
+    import shutil
+    p = shutil.which("node")
+    if p:
+        return p
+    def ver(path):
+        v = path.split("/versions/node/v", 1)[-1].split("/", 1)[0]
+        try:
+            return tuple(int(x) for x in v.split("."))
+        except ValueError:
+            return (0,)
+    nvm = os.environ.get("NVM_DIR") or os.path.expanduser("~/.nvm")
+    cands = sorted(glob.glob(os.path.join(nvm, "versions", "node", "v*", "bin", "node")), key=ver)
+    return cands[-1] if cands else "node"
