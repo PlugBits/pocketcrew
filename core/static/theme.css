@@ -51,32 +51,23 @@
 
 :root[data-theme="light"]{
   color-scheme: light;
-  --bg:#f4f5f9; --fg:#1c2130; --sub:#5b6478; --dim:#7b8296;
-  --card:#ffffff; --line:#dde1ec;
-  --bg2:#eef0f6; --bg3:#e7eaf3;
-  --ok:#1c9169; --busy:#a5710a; --warn:#c72e42; --dead:#8891a6; --acc:#2f6fdb;
-  --c-note:#2a63cc; --c-x:#b8481c; --c-green:#178055;
-  --ok-fg:#ffffff;
-  --tint-warn:rgba(199,46,66,.13); --tint-busy:rgba(165,113,10,.14);
-  --tint-ok:rgba(28,145,105,.13); --tint-dim:rgba(91,100,120,.12);
-  --btn-bg:#e7ecf9; --btn-fg:#1c2a54; --btn-line:#c7d2ea;
-  --pri-bg:#2f6fdb; --pri-fg:#fff; --pri-line:#5c8ce6;
-  --me-bg:#dceaff; --me-fg:#15294f;
-  --title-accent:#2a5cc7; --link:#2a5cc7;
-  --scrim:rgba(30,36,58,.4);
-  --sheet-shadow:0 8px 24px rgba(30,40,70,.16);
-  --approval-bg:#fbeef4; --approval-line:#f0cede;
-  --tab-hl-bg:#dee7fb;
-  --tool-bg:rgba(20,30,60,.04);
-  --hit-sel:rgba(20,30,60,.05);
-  --thumb-bg:#eef0f6;
-  --canvas-bg:#eef1f8;
-  --img-bg:#fff;
-  --img-shadow:0 2px 12px rgba(30,40,70,.14);
-  --cbcopy-ok-fg:#12805a; --cbcopy-ok-line:#9fe3c8;
-  --kpi-c1:rgba(47,111,219,.32);
-  --toast-bg:rgba(255,255,255,.97);
-  --err-bg:rgba(255,255,255,.9);
+  --bg:#FCF7EC; --fg:#2B2A33; --sub:#6B5B45; --dim:#9A8A70;
+  --card:#F7EEDC; --line:#E8D9BC; --bg2:#F5ECD9; --bg3:#EFE3CB;
+  --acc:#1F3A5F; --ok:#4E7A5C; --busy:#9C7426; --warn:#A8483C; --dead:#9A8E7A; --ok-fg:#fff;
+  --link:#24406A; --title-accent:#1F3A5F; --c-green:#4E7A5C; --c-note:#1F3A5F;
+  --tint-warn:rgba(168,72,60,.12); --tint-busy:rgba(156,116,38,.13); --tint-ok:rgba(78,122,92,.13); --tint-dim:rgba(107,91,69,.10);
+  --btn-bg:#F3E9D4; --btn-fg:#2B2A33; --btn-line:#E0CFAE;
+  --pri-bg:#1F3A5F; --pri-line:#1F3A5F; --pri-fg:#FCF7EC;
+  --me-bg:#E6E6E0; --me-fg:#1F2A3A; --tab-hl-bg:#E9E4D6;
+  --scrim:rgba(43,35,20,.35); --sheet-shadow:0 8px 24px rgba(80,60,20,.16);
+  --approval-bg:#F8E9E2; --approval-line:#EBCFC3;
+  --tool-bg:rgba(80,60,20,.05); --hit-sel:rgba(80,60,20,.06); --thumb-bg:#F5ECD9;
+  --img-bg:#fff; --img-shadow:0 2px 12px rgba(80,60,20,.14); --toast-bg:rgba(253,249,240,.97); --err-bg:rgba(253,249,240,.92);
+  --kpi-c1:rgba(31,58,95,.28); --cbcopy-ok-fg:#1F3A5F; --cbcopy-ok-line:#C5CFDC;
+  --cv-bg:#FAF3E3; --cv-dot:rgba(120,90,40,.16); --cv-ring:36 30% 55%; --cv-orbit:34 35% 45%; --cv-label:rgba(43,42,51,.82); --cv-glow-a:0.45;
+  --cv-style:compass; --cv-ink:#1F3A5F;
+  --st-idle:150 25% 38%; --st-working:38 60% 42%; --st-need:350 45% 46%; --st-typed:215 45% 40%; --st-dead:35 10% 58%; --st-unknown:35 10% 52%;
+  --stg-idle:150 28% 70%; --stg-working:40 62% 70%; --stg-need:350 45% 76%; --stg-typed:215 40% 74%; --stg-dead:35 10% 78%; --stg-unknown:35 10% 72%;
 }
 
 /* JS が間に合っていない/使えないときだけの保険(通常は各ページ先頭のインラインスクリプトが
@@ -84,31 +75,26 @@
 @media (prefers-color-scheme: light){
   :root:not([data-theme="dark"]):not([data-theme="light"]){
     color-scheme: light;
-    --bg:#f4f5f9; --fg:#1c2130; --sub:#5b6478; --dim:#7b8296;
-    --card:#ffffff; --line:#dde1ec;
-    --bg2:#eef0f6; --bg3:#e7eaf3;
-    --ok:#1c9169; --busy:#a5710a; --warn:#c72e42; --dead:#8891a6; --acc:#2f6fdb;
-    --c-note:#2a63cc; --c-x:#b8481c; --c-green:#178055;
-    --ok-fg:#ffffff;
-    --tint-warn:rgba(199,46,66,.13); --tint-busy:rgba(165,113,10,.14);
-    --tint-ok:rgba(28,145,105,.13); --tint-dim:rgba(91,100,120,.12);
-    --btn-bg:#e7ecf9; --btn-fg:#1c2a54; --btn-line:#c7d2ea;
-    --pri-bg:#2f6fdb; --pri-fg:#fff; --pri-line:#5c8ce6;
-    --me-bg:#dceaff; --me-fg:#15294f;
-    --title-accent:#2a5cc7; --link:#2a5cc7;
-    --scrim:rgba(30,36,58,.4);
-    --sheet-shadow:0 8px 24px rgba(30,40,70,.16);
-    --approval-bg:#fbeef4; --approval-line:#f0cede;
-    --tab-hl-bg:#dee7fb;
-    --tool-bg:rgba(20,30,60,.04);
-    --hit-sel:rgba(20,30,60,.05);
-    --thumb-bg:#eef0f6;
-    --canvas-bg:#eef1f8;
-    --img-bg:#fff;
-    --img-shadow:0 2px 12px rgba(30,40,70,.14);
-    --cbcopy-ok-fg:#12805a; --cbcopy-ok-line:#9fe3c8;
-    --kpi-c1:rgba(47,111,219,.32);
-    --toast-bg:rgba(255,255,255,.97);
-    --err-bg:rgba(255,255,255,.9);
+    --bg:#FCF7EC; --fg:#2B2A33; --sub:#6B5B45; --dim:#9A8A70;
+    --card:#F7EEDC; --line:#E8D9BC; --bg2:#F5ECD9; --bg3:#EFE3CB;
+    --acc:#1F3A5F; --ok:#4E7A5C; --busy:#9C7426; --warn:#A8483C; --dead:#9A8E7A; --ok-fg:#fff;
+    --link:#24406A; --title-accent:#1F3A5F; --c-green:#4E7A5C; --c-note:#1F3A5F;
+    --tint-warn:rgba(168,72,60,.12); --tint-busy:rgba(156,116,38,.13); --tint-ok:rgba(78,122,92,.13); --tint-dim:rgba(107,91,69,.10);
+    --btn-bg:#F3E9D4; --btn-fg:#2B2A33; --btn-line:#E0CFAE;
+    --pri-bg:#1F3A5F; --pri-line:#1F3A5F; --pri-fg:#FCF7EC;
+    --me-bg:#E6E6E0; --me-fg:#1F2A3A; --tab-hl-bg:#E9E4D6;
+    --scrim:rgba(43,35,20,.35); --sheet-shadow:0 8px 24px rgba(80,60,20,.16);
+    --approval-bg:#F8E9E2; --approval-line:#EBCFC3;
+    --tool-bg:rgba(80,60,20,.05); --hit-sel:rgba(80,60,20,.06); --thumb-bg:#F5ECD9;
+    --img-bg:#fff; --img-shadow:0 2px 12px rgba(80,60,20,.14); --toast-bg:rgba(253,249,240,.97); --err-bg:rgba(253,249,240,.92);
+    --kpi-c1:rgba(31,58,95,.28); --cbcopy-ok-fg:#1F3A5F; --cbcopy-ok-line:#C5CFDC;
+    --cv-bg:#FAF3E3; --cv-dot:rgba(120,90,40,.16); --cv-ring:36 30% 55%; --cv-orbit:34 35% 45%; --cv-label:rgba(43,42,51,.82); --cv-glow-a:0.45;
+    --cv-style:compass; --cv-ink:#1F3A5F;
+    --st-idle:150 25% 38%; --st-working:38 60% 42%; --st-need:350 45% 46%; --st-typed:215 45% 40%; --st-dead:35 10% 58%; --st-unknown:35 10% 52%;
+    --stg-idle:150 28% 70%; --stg-working:40 62% 70%; --stg-need:350 45% 76%; --stg-typed:215 40% 74%; --stg-dead:35 10% 78%; --stg-unknown:35 10% 72%;
   }
 }
+
+/* ライト「羅針盤」(2026-09-28: 明るい羊皮紙+紺のインク。惑星の中心は羅針盤) */
+:root[data-theme="light"] button.pri:disabled{background:var(--btn-bg);color:var(--dim);border-color:var(--btn-line);opacity:1}
+:root[data-theme="light"] a{text-decoration-thickness:1px;text-underline-offset:3px}

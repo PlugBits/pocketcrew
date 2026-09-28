@@ -342,8 +342,34 @@ const NEEDS=['approval','trust','choice','login','dead','typed'];
 // 「惑星・心臓の状態色は見分けが付くこと」の要件)。
 const STATE_HSL_DARK={idle:[150,80,70],working:[45,100,70],approval:[350,100,70],trust:[350,100,70],choice:[350,100,70],login:[350,100,70],typed:[215,100,80],dead:[230,10,45],unknown:[230,10,60]};
 const STATE_HSL_LIGHT={idle:[150,60,30],working:[36,90,40],approval:[340,70,42],trust:[340,70,42],choice:[340,70,42],login:[340,70,42],typed:[220,75,45],dead:[230,10,58],unknown:[230,10,46]};
+// ライトの惑星まわりの色は theme.css の変数から読む(2026-09-28。配色を CSS だけで差し替えられるように)。
+// 毎フレーム getComputedStyle しないよう1秒ごとに読み直す。変数が無ければ従来の値
+let _lp={t:0,v:null};
+function lightPal(){
+  const now=Date.now(); if(_lp.v&&now-_lp.t<1000) return _lp.v;
+  const cs=getComputedStyle(document.documentElement), g=(k,d)=>(cs.getPropertyValue(k)||'').trim()||d;
+  const st={}; for(const k of ['idle','working','need','typed','dead','unknown']){st[k]=g('--st-'+k,''); st['g_'+k]=g('--stg-'+k,'');}
+  _lp={t:now,v:{bg:g('--cv-bg',''),dot:g('--cv-dot',''),ring:g('--cv-ring',''),orbit:g('--cv-orbit',''),label:g('--cv-label',''),
+    glowA:parseFloat(g('--cv-glow-a','0.9'))||0.9,style:g('--cv-style',''),ink:g('--cv-ink','#1F3A5F'),st}}; return _lp.v;
+}
+const _STKEY={approval:'need',trust:'need',choice:'need',login:'need'};
+function drawCompass(cx,cy,r,ink,T){
+  ctx.save(); ctx.translate(cx,cy);
+  ctx.strokeStyle=ink; ctx.globalAlpha=.55; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.arc(0,0,r*1.05,0,Math.PI*2); ctx.stroke();
+  ctx.globalAlpha=.3; ctx.beginPath(); ctx.arc(0,0,r*0.78,0,Math.PI*2); ctx.stroke();
+  for(let i=0;i<32;i++){const a=i/32*Math.PI*2, l=i%4===0?0.16:0.08; ctx.beginPath(); ctx.moveTo(Math.cos(a)*r*1.05,Math.sin(a)*r*1.05); ctx.lineTo(Math.cos(a)*r*(1.05-l),Math.sin(a)*r*(1.05-l)); ctx.stroke();}
+  const star=(n,len,wid,alpha,rot)=>{for(let i=0;i<n;i++){const a=rot+i/n*Math.PI*2-Math.PI/2, b=a+Math.PI/n;
+    for(const side of [0,1]){ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(Math.cos(a)*len,Math.sin(a)*len); const bb=side?b:a-Math.PI/n; ctx.lineTo(Math.cos(bb)*wid,Math.sin(bb)*wid); ctx.closePath();
+      ctx.globalAlpha=alpha*(side?1:0.35); ctx.fillStyle=ink; ctx.fill(); ctx.globalAlpha=alpha; ctx.stroke();}}};
+  ctx.lineWidth=.8; star(4,r*0.72,r*0.16,.42,Math.PI/4); star(4,r*1.0,r*0.2,.85,0);
+  ctx.globalAlpha=.9; ctx.fillStyle=ink; ctx.font=`600 ${Math.max(9,r*0.28)}px Georgia,"Times New Roman",serif`; ctx.textAlign='center'; ctx.textBaseline='middle';
+  // 方角の文字(N/E/S/W)は出さない(2026-09-28)
+  ctx.restore(); ctx.globalAlpha=1;
+}
 function stateHsl(state){
   const light=window.TP_THEME&&TP_THEME.mode==='light';
+  if(light){const v=lightPal().st[_STKEY[state]||state]; if(v) return v;}
   const table=light?STATE_HSL_LIGHT:STATE_HSL_DARK;
   const t=table[state]||table.unknown;
   return t[0]+' '+t[1]+'% '+t[2]+'%';
@@ -354,6 +380,7 @@ function stateHsl(state){
 const STATE_HSL_LIGHT_GLOW={idle:[150,60,62],working:[36,90,60],approval:[345,75,62],trust:[345,75,62],choice:[345,75,62],login:[345,75,62],typed:[220,80,62],dead:[230,10,60],unknown:[230,10,55]};
 function stateGlowHsl(state){
   if(!(window.TP_THEME&&TP_THEME.mode==='light')) return stateHsl(state);
+  {const v=lightPal().st['g_'+(_STKEY[state]||state)]; if(v) return v;}
   const t=STATE_HSL_LIGHT_GLOW[state]||STATE_HSL_LIGHT_GLOW.unknown;
   return t[0]+' '+t[1]+'% '+t[2]+'%';
 }
@@ -1177,22 +1204,23 @@ function frameBody(now){
   // 同じにして「意味」は変えず、明度・彩度・不透明度だけをライトの白背景向けに調整する
   // (要件: 淡い軌道・控えめな光・読める名札・状態色は見分けが付くこと)。window.TP_THEME は
   // core/static/theme.js が ⋯メニューの選択と端末配色(matchMedia)から毎回更新している。
-  const light=!!(window.TP_THEME&&TP_THEME.mode==='light');
+  const light=!!(window.TP_THEME&&TP_THEME.mode==='light'); const LP=light?lightPal():null;
   const nS=Math.max(1,sessions.length); const cx=W/2, cy=H/2, R=Math.max(8,Math.min(Math.min(W,H)*0.27,(H/2-26)/(1.05+0.38*(nS-1)),(W/2-70)/(1.05+0.38*(nS-1))));   // ラベル分の余白を横にも確保
-  ctx.fillStyle=light?`hsl(${hue} 38% 95%)`:`hsl(${hue} 45% 5%)`; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle=light?(LP.bg||`hsl(${hue} 38% 95%)`):`hsl(${hue} 45% 5%)`; ctx.fillRect(0,0,W,H);
   // 粒子(プロセス数)
   ensureParts(Math.min(PART_MAX,Math.round(view.procs*2.5))); const sp=10+view.load*60;
-  ctx.fillStyle=light?`hsla(${hue} 45% 35% / .16)`:`hsla(${hue} 80% 80% / .35)`;
+  ctx.fillStyle=light?(LP.dot||`hsla(${hue} 45% 35% / .16)`):`hsla(${hue} 80% 80% / .35)`;
   for(const p of parts){const a=noise(p.x*0.003+T*0.05,p.y*0.003)*Math.PI*2;p.x+=Math.cos(a)*sp*dt;p.y+=Math.sin(a)*sp*dt;
     if(p.x<0)p.x+=W;if(p.x>W)p.x-=W;if(p.y<0)p.y+=H;if(p.y>H)p.y-=H;ctx.globalAlpha=(light?0.2:0.25)+0.5*p.l;ctx.fillRect(p.x,p.y,1.2,1.2);}
   ctx.globalAlpha=1;
   // 年輪(稼働6時間ごと)。ライトは「淡い軌道」の指示どおり、薄いグレーがかった線に
   const rings=Math.min(60,Math.floor(view.uptime/21600)); ctx.lineWidth=1;
   for(let i=1;i<=rings;i++){const rr=R*1.15+i*Math.max(3,(Math.min(W,H)/2-R*1.2)/62); const a=0.05+0.05*(i%4===0);
-    ctx.strokeStyle=light?`hsla(${hue} 30% 45% / ${a*0.6})`:`hsla(${hue} 60% 70% / ${a})`;ctx.beginPath();ctx.arc(cx,cy,rr,0,Math.PI*2);ctx.stroke();}
+    ctx.strokeStyle=light?`hsla(${LP.ring||(hue+' 30% 45%')} / ${a*0.6})`:`hsla(${hue} 60% 70% / ${a})`;ctx.beginPath();ctx.arc(cx,cy,rr,0,Math.PI*2);ctx.stroke();}
   // 心臓: 全セッションの状態で色と鼓動が変わる。停止/エラー=赤(ゆっくり) > 入力待ち=紫(二拍) > 作業中=黄(鼓動) > 全て待機=緑(静止)
   const agg=sessions.some(s=>s.state==='dead')?'dead':sessions.some(s=>['approval','trust','choice','login'].includes(s.state))?'need':sessions.some(s=>s.state==='working')?'working':'idle';
-  const heartHue={idle:150,working:45,need:290,dead:0}[agg];
+  let heartHue={idle:150,working:45,need:290,dead:0}[agg];
+  if(light&&LP.st[agg]) heartHue=parseFloat(LP.st[agg]);
   let pulse=0;
   if(agg==='working'){const bpm=48+view.load*40; beat+=dt*bpm/60; pulse=Math.pow(Math.max(0,Math.sin(beat*Math.PI*2)),6);}
   else if(agg==='need'){beat+=dt*1.6; const ph=beat%1; pulse=Math.pow(Math.max(0,Math.sin(ph*Math.PI*2)),8)*(ph<0.5?1:0.55);}
@@ -1203,7 +1231,10 @@ function frameBody(now){
   const heartGradL=light?46:60, heartRingL0=light?46:72, heartRingStep=light?8:12, heartFillL=light?42:50;
   const g=ctx.createRadialGradient(cx,cy,core*0.2,cx,cy,core*2.2); g.addColorStop(0,`hsla(${heartHue} ${light?70:90}% ${heartGradL}% / ${((agg==='idle'?0.22:0.32)+pulse*0.28)*(light?0.85:1)})`); g.addColorStop(1,'transparent');
   ctx.fillStyle=g; ctx.beginPath(); ctx.arc(cx,cy,core*2.2,0,Math.PI*2); ctx.fill();
-  for(let layer=0;layer<3;layer++){ctx.beginPath();
+  // 羅針盤の見た目(2026-09-28。theme.css の --cv-style: compass のときだけ)。心臓の揺れる輪の代わりに
+  // 8方位の星と N/E/S/W を描く。状態の色は輪の下の淡い光で残す
+  if(light&&LP.style==='compass'){drawCompass(cx,cy,Math.max(core*1.35,14),LP.ink,T);}
+  else for(let layer=0;layer<3;layer++){ctx.beginPath();
     for(let i=0;i<=180;i++){const a=i/180*Math.PI*2,n=noise(Math.cos(a)*1.6+layer*7+T*0.4,Math.sin(a)*1.6+T*0.3),rr=core*(1+layer*0.12)*(1+n*(0.05+rough*0.35));const x=cx+Math.cos(a)*rr,y=cy+Math.sin(a)*rr;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}
     ctx.closePath(); ctx.strokeStyle=`hsla(${heartHue} 85% ${heartRingL0-layer*heartRingStep}% / ${0.6-layer*0.15})`; ctx.lineWidth=1.5-layer*0.4; ctx.stroke();
     if(layer===0){ctx.fillStyle=`hsla(${heartHue} 80% ${heartFillL}% / ${0.14+pulse*0.12})`;ctx.fill();}}
@@ -1217,11 +1248,11 @@ function frameBody(now){
   sessions.forEach((s,i)=>{const orbit=R*1.05+i*R*0.38; s.ang+=dt*(0.12+view.load*0.2)/(1+i*0.6);
     // 2026-09-26: 2日ほど動いたスレで直径25px になり、丸どうし・名札と重なっていたので6割に
     const size=Math.max(2,(s.pid?4+Math.log10(1+s.age_s/60)*2.4:3)*0.6); s.plSize=size; s.glow+=(s.cpu_s/totalCpu-s.glow)*dt; const col=stateGlowHsl(s.state);
-    ctx.strokeStyle=light?`hsla(${hue} 30% 40% / .10)`:`hsla(${hue} 70% 80% / .12)`; ctx.lineWidth=1; ctx.beginPath(); ctx.arc(cx,cy,orbit,0,Math.PI*2); ctx.stroke();
+    ctx.strokeStyle=light?`hsla(${LP.orbit||(hue+' 30% 40%')} / .10)`:`hsla(${hue} 70% 80% / .12)`; ctx.lineWidth=1; ctx.beginPath(); ctx.arc(cx,cy,orbit,0,Math.PI*2); ctx.stroke();
     const x=cx+Math.cos(s.ang)*orbit, y=cy+Math.sin(s.ang)*orbit; s.px=x; s.py=y;
     ctx.beginPath(); for(let k=0;k<40;k++){const a=s.ang-k*0.012*(1+view.load),px=cx+Math.cos(a)*orbit,py=cy+Math.sin(a)*orbit;k?ctx.lineTo(px,py):ctx.moveTo(px,py);}
-    ctx.strokeStyle=`hsla(${col} / ${(0.15+s.glow*0.5)*(light?0.9:1)})`; ctx.lineWidth=size*0.5; ctx.lineCap='round'; ctx.stroke();
-    const pg=ctx.createRadialGradient(x,y,0,x,y,size*3); pg.addColorStop(0,`hsla(${col} / ${(0.35+s.glow*0.4)*(light?0.9:1)})`); pg.addColorStop(1,'transparent');   // 光のにじみも控えめに(9/26。ライトは丸自体を状態色にしたので、滲みは中間の明るさの色で「淡い光」に留める)
+    ctx.strokeStyle=`hsla(${col} / ${(0.15+s.glow*0.5)*(light?LP.glowA:1)})`; ctx.lineWidth=size*0.5; ctx.lineCap='round'; ctx.stroke();
+    const pg=ctx.createRadialGradient(x,y,0,x,y,size*3); pg.addColorStop(0,`hsla(${col} / ${(0.35+s.glow*0.4)*(light?LP.glowA:1)})`); pg.addColorStop(1,'transparent');   // 光のにじみも控えめに(9/26。ライトは丸自体を状態色にしたので、滲みは中間の明るさの色で「淡い光」に留める)
     ctx.fillStyle=pg; ctx.beginPath(); ctx.arc(x,y,size*3,0,Math.PI*2); ctx.fill();
     // 衛星 = 実行中のサブエージェント。水平の細い楕円(9/25: 斜め→水平・控えめな大きさ)で、奥側を通るときは惑星の後ろに隠れる
     const ag=(s.agents||[]).length, tilt=0, sats=[];
@@ -1266,7 +1297,7 @@ function frameBody(now){
         if(rect.x<2||rect.y<2||rect.x+rect.w>W-2||rect.y+rect.h>H-2) continue;   // 端からはみ出す位置は不可
         if(placed.some(p=>rect.x<p.x+p.w&&p.x<rect.x+rect.w&&rect.y<p.y+p.h&&p.y<rect.y+rect.h)) continue;   // 既存の名札と重なるなら不可
         placed.push(rect);
-        ctx.fillStyle=light?'hsla(230 30% 16% / .82)':'hsla(0 0% 100% / .82)'; ctx.textAlign=c.align; ctx.fillText(text, c.x, c.y);
+        ctx.fillStyle=light?(LP.label||'hsla(230 30% 16% / .82)'):'hsla(0 0% 100% / .82)'; ctx.textAlign=c.align; ctx.fillText(text, c.x, c.y);
         done=true; break;
       }
       // done===false: どこに置いても重なる/はみ出すので、この名札は描かない
