@@ -2,16 +2,21 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
+<!-- 配色(ライト/ダーク)の初回ペイント前の適用。全ページの <head> 先頭に同文面を複製する
+     (core/static/theme.js の THEME_BOOT_SNIPPET と同じ内容。本体は theme.js・変数は theme.css)。
+     新しい room を作るときもここは削らないこと。 -->
+<script>(function(){try{var v=localStorage.getItem('tp.theme');var m=(v==='light'||v==='dark')?v:(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',m);}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#070a14">
+<meta name="theme-color" content="#070a14" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f4f5f9" media="(prefers-color-scheme: light)">
+<link rel="stylesheet" href="/theme.css">
 <title>ポケクル · メモ</title>
 <style>
-  /* 配色変数は core/static/index.html・rooms/workout の page.html と同じもの(ダークテーマ1本)。
-     コピーしたら :root の変数はそのまま、必要なら #mm-root 以下のクラス名だけ増やせばよい */
-  :root{--bg:#070a14;--fg:#e8ecf5;--sub:#a9b3cc;--dim:#8892b0;--card:#0e1326;--line:#1b2340;--warn:#ff6b7a;--acc:#5aa0ff;
-    --fs-body:16px;--fs-sub:13px;--fs-title:18px;--lh:1.6;
+  /* 配色変数は core/static/theme.css に一本化した(2026-09-27 ライトテーマ)。ここに残すのは
+     レイアウト用の変数だけ。コピーしたら、この節はそのまま・#mm-root 以下のクラス名だけ増やせばよい */
+  :root{--fs-body:16px;--fs-sub:13px;--fs-title:18px;--lh:1.6;
     --font-ui:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Noto Sans JP',sans-serif;}
   html,body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font-ui);font-size:var(--fs-body);line-height:var(--lh);-webkit-text-size-adjust:100%}
   #mm-root{padding:calc(10px + env(safe-area-inset-top)) 12px calc(30px + env(safe-area-inset-bottom))}
@@ -20,8 +25,8 @@
   #mm-root .top h1{font-size:var(--fs-title);margin:0;font-weight:600;flex:1}
   #mm-root .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:12px}
   #mm-root .row{display:flex;gap:8px}
-  #mm-root input[type=text]{flex:1;min-width:0;box-sizing:border-box;background:#0b1020;color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:10px;font-size:16px;min-height:44px}
-  #mm-root button{background:#1f2f5e;color:#dfe7ff;border:1px solid #2c3f7a;border-radius:10px;padding:10px 14px;font-size:var(--fs-body);min-height:44px;flex:none}
+  #mm-root input[type=text]{flex:1;min-width:0;box-sizing:border-box;background:var(--bg2);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:10px;font-size:16px;min-height:44px}
+  #mm-root button{background:var(--btn-bg);color:var(--btn-fg);border:1px solid var(--btn-line);border-radius:10px;padding:10px 14px;font-size:var(--fs-body);min-height:44px;flex:none}
   #mm-root button:disabled{opacity:.4}
   #mm-root .item{padding:9px 0;border-bottom:1px solid var(--line);font-size:var(--fs-body);white-space:pre-wrap;word-break:break-word}
   #mm-root .item:last-child{border-bottom:0}
@@ -74,6 +79,7 @@
   addEventListener('pageshow',function(){document.body.style.transition='';document.body.style.transform='';});
 })();
 </script>
+<script src="/theme.js"></script>
 <script src="/{{ROOM}}.js"></script>
 </body>
 </html>

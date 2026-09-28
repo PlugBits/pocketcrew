@@ -2,21 +2,28 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
+<!-- 配色(ライト/ダーク)の初回ペイント前の適用(2026-09-27)。全ページの <head> 先頭に同文面を複製する
+     (core/static/theme.js の THEME_BOOT_SNIPPET と同じ内容。本体は theme.js・変数は theme.css)。
+     localStorage が例外を投げても必ず data-theme を確定させ、真っ暗/真っ白のままにしない。 -->
+<script>(function(){try{var v=localStorage.getItem('tp.theme');var m=(v==='light'||v==='dark')?v:(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',m);}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#070a14">
+<meta name="theme-color" content="#070a14" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f4f5f9" media="(prefers-color-scheme: light)">
+<link rel="stylesheet" href="/theme.css">
 <link rel="manifest" href="/manifest.json">
 <link rel="apple-touch-icon" href="/icon-192.png">
 <title>ポケクル</title>
 <style>
   /* ゼロから作り直し(2026-09-22 v2)。env(safe-area-inset-*) を直接書いてよいのはここの2行だけ。
      他は必ず var(--sat)/var(--sab) を使うこと(検証ツールがこの2行にだけ実機相当の値を流し込む) */
+  /* 配色(--bg・--fg・--acc 等)は core/static/theme.css に一本化した(2026-09-27 ライトテーマ)。
+     ここに残すのは実機の値を差し込む2行(env)とレイアウト用の変数だけ */
   :root{
     --sat: env(safe-area-inset-top, 0px);
     --sab: env(safe-area-inset-bottom, 0px);
     --kb: 0px;
-    --bg:#070a14;--fg:#e8ecf5;--sub:#a9b3cc;--dim:#8892b0;--card:#0e1326;--line:#1b2340;--ok:#5fe0b0;--busy:#ffd166;--warn:#ff6b7a;--dead:#556;--acc:#5aa0ff;--c-note:#3987e5;--c-x:#d95926;
     --fs-body:16px;--fs-sub:13px;--fs-small:12px;--fs-title:18px;--fs-h1:22px;--lh:1.6;
     --font-ui:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Noto Sans JP',sans-serif;--font-mono:Menlo,'SF Mono',ui-monospace,monospace;
     --compose-h:120px;--tcompose-h:120px;
@@ -25,34 +32,34 @@
   /* 画面は2つだけ(ホーム/スレ)。この2枚だけが position:fixed;inset:0 を持つ土台 */
   .screen{position:fixed;inset:0;display:none;flex-direction:column;background:var(--bg)}
   .screen.on{display:flex}
-  .hdr{flex:none;box-sizing:border-box;padding-top:var(--sat);background:#070a14;border-bottom:1px solid var(--line);z-index:2}
+  .hdr{flex:none;box-sizing:border-box;padding-top:var(--sat);background:var(--bg);border-bottom:1px solid var(--line);z-index:2}
   .hdr-row{display:flex;align-items:center;gap:6px;min-height:46px;padding:0 10px;box-sizing:border-box}
   .hdr .icon{background:transparent;border:0;color:var(--fg);font-size:19px;padding:6px 8px;min-height:40px;min-width:36px;line-height:1;flex:none;display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box}
   .hdr .icon svg{display:block}
   .hdr-icons{display:flex;align-items:center;gap:2px;flex:none}
   .hdr .ttl{font-weight:600;font-size:var(--fs-sub);letter-spacing:.04em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
-  .hdr .ttl b{color:#9ec1ff}
+  .hdr .ttl b{color:var(--title-accent)}
   .hdr .sp{flex:1;min-width:0}
   .hdr .t-name{font-weight:600;font-size:var(--fs-body);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:36vw;flex:none}
   .hdr .t-state{font-size:var(--fs-sub);color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .scroll{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;box-sizing:border-box}
-  #pulse{position:relative;height:280px;box-sizing:border-box;background:#070c18;flex:none}
+  #pulse{position:relative;height:280px;box-sizing:border-box;background:var(--canvas-bg);flex:none}
   #c{display:block;width:100%;height:100%;pointer-events:none}
-  #err{position:fixed;left:12px;right:12px;top:calc(var(--hdr-h, 46px) + 6px);font-size:var(--fs-sub);color:var(--warn);opacity:0;z-index:6;background:rgba(7,10,20,.85);padding:4px 8px;border-radius:8px;white-space:pre-wrap;pointer-events:none}
+  #err{position:fixed;left:12px;right:12px;top:calc(var(--hdr-h, 46px) + 6px);font-size:var(--fs-sub);color:var(--warn);opacity:0;z-index:6;background:var(--err-bg);padding:4px 8px;border-radius:8px;white-space:pre-wrap;pointer-events:none}
   #cards{display:grid;grid-template-columns:minmax(0,1fr);gap:10px}
   .card{background:transparent;border:0;border-radius:0;padding:0;min-width:0;overflow:visible}
-  .card.approval,.card.trust,.card.choice,.card.login{background:#120d18}
+  .card.approval,.card.trust,.card.choice,.card.login{background:var(--approval-bg)}
   .card.dead{opacity:.8}
   .st{font-weight:600}
   .idle .st{color:var(--ok)} .working .st{color:var(--busy)} .approval .st,.trust .st,.choice .st,.login .st{color:var(--warn)}
-  #tQuestion{flex:none;margin:0;padding:10px 16px;font-size:var(--fs-sub);line-height:var(--lh);background:#160d1a;border-bottom:1px solid #3a2340;box-sizing:border-box}
+  #tQuestion{flex:none;margin:0;padding:10px 16px;font-size:var(--fs-sub);line-height:var(--lh);background:var(--approval-bg);border-bottom:1px solid var(--approval-line);box-sizing:border-box}
   #tQuestion pre{font-family:var(--font-mono);color:var(--warn);white-space:pre-wrap;margin:0 0 6px;max-height:22vh;overflow:auto}
   #tQuestion .hint{color:var(--sub)}
   #tQuestion[hidden]{display:none}
   .qc-tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
   .qc-tab{font-size:var(--fs-small);color:var(--dim);border:1px solid var(--line);border-radius:10px;padding:2px 8px}
   .qc-tab.done{color:var(--ok);border-color:var(--ok)}
-  .qc-tab.cur{color:var(--fg);border-color:var(--warn);background:rgba(255,107,122,.12)}
+  .qc-tab.cur{color:var(--fg);border-color:var(--warn);background:var(--tint-warn)}
   .qc-progress{color:var(--sub);font-size:var(--fs-small);margin-bottom:2px}
   .qc-prompt{color:var(--fg);font-weight:600;margin-bottom:2px}
   .qc-opts button{display:flex;flex-direction:column;align-items:flex-start;text-align:left;gap:2px;flex:1 1 100%}
@@ -79,23 +86,23 @@
   /* スレ画面の送信欄(1つだけ)。カードの一部だが position:fixed で常に画面下に貼り付ける */
   #threadScroll{padding-bottom:calc(var(--tcompose-h) + var(--sab) + var(--kb) + 14px)}
   .cardsend{position:fixed;left:0;right:0;bottom:var(--kb);z-index:5;background:var(--card);border-top:1px solid var(--line);box-sizing:border-box;padding:10px 12px calc(10px + max(0px, var(--sab) - var(--kb)))}
-  textarea{box-sizing:border-box;flex:1;min-width:0;background:#0b1020;color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:10px;font-size:var(--fs-body);font-family:var(--font-ui);line-height:var(--lh);min-height:44px;max-height:30vh;resize:none;outline:none}
-  button{box-sizing:border-box;background:#1f2f5e;color:#dfe7ff;border:1px solid #2c3f7a;border-radius:10px;padding:10px 14px;font-size:var(--fs-body);font-family:var(--font-ui);min-height:44px}
+  textarea{box-sizing:border-box;flex:1;min-width:0;background:var(--bg2);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:10px;font-size:var(--fs-body);font-family:var(--font-ui);line-height:var(--lh);min-height:44px;max-height:30vh;resize:none;outline:none}
+  button{box-sizing:border-box;background:var(--btn-bg);color:var(--btn-fg);border:1px solid var(--btn-line);border-radius:10px;padding:10px 14px;font-size:var(--fs-body);font-family:var(--font-ui);min-height:44px}
   button:disabled{opacity:.4}
-  button.pri{background:#2f6fdb;border-color:#4a86ea;color:#fff}
+  button.pri{background:var(--pri-bg);border-color:var(--pri-line);color:var(--pri-fg)}
   button:active{transform:translateY(1px) scale(.98);filter:brightness(1.15)}
   .task:active,#summary:active{filter:brightness(1.12)}
-  #confirm{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:flex-end;z-index:9}
+  #confirm{position:fixed;inset:0;background:var(--scrim);display:none;align-items:flex-end;z-index:9}
   #confirm.on{display:flex}
-  #confirm .sheet{box-sizing:border-box;background:#0e1326;border-top:1px solid var(--line);border-radius:18px 18px 0 0;padding:16px 16px calc(16px + var(--sab));width:100%}
+  #confirm .sheet{box-sizing:border-box;background:var(--card);border-top:1px solid var(--line);border-radius:18px 18px 0 0;padding:16px 16px calc(16px + var(--sab));width:100%}
   #confirm .to{font-size:var(--fs-sub);color:var(--dim);margin-bottom:8px}
   #confirm .txt{white-space:pre-wrap;font-size:var(--fs-body);line-height:var(--lh);max-height:40vh;overflow:auto;margin-bottom:12px}
   #confirm .btns{display:flex;gap:8px;justify-content:flex-end}
   .chatlog{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;margin-top:8px;padding:0 16px}
   .chatlog>div{min-width:0}
-  .chatlog .me{font-family:var(--font-ui);font-size:var(--fs-body);line-height:var(--lh);background:#1b2a55;color:#dfe7ff;border-radius:12px;padding:8px 12px 8px 30px;justify-self:end;max-width:88%}
+  .chatlog .me{font-family:var(--font-ui);font-size:var(--fs-body);line-height:var(--lh);background:var(--me-bg);color:var(--me-fg);border-radius:12px;padding:8px 12px 8px 30px;justify-self:end;max-width:88%}
   .chatlog .re{font-family:var(--font-ui);font-size:var(--fs-body);line-height:var(--lh);color:var(--fg);background:none;border:0;padding:2px 30px 2px 0;max-width:100%}
-  .chatlog .tool{font-family:var(--font-ui);font-size:var(--fs-sub);color:var(--dim);padding:6px 10px;white-space:pre-wrap;word-break:break-word;border-left:2px solid var(--line);border-radius:0 8px 8px 0;background:rgba(255,255,255,.02);cursor:pointer}
+  .chatlog .tool{font-family:var(--font-ui);font-size:var(--fs-sub);color:var(--dim);padding:6px 10px;white-space:pre-wrap;word-break:break-word;border-left:2px solid var(--line);border-radius:0 8px 8px 0;background:var(--tool-bg);cursor:pointer}
   .chatlog .tool .chev{opacity:.6;font-size:var(--fs-small)}
   .chatlog .tool.open{color:var(--sub)}
   .chatlog .tool .full{display:block;margin-top:6px;font-family:var(--font-mono);font-size:var(--fs-sub);line-height:var(--lh);color:var(--sub);white-space:pre-wrap;word-break:break-word}
@@ -107,29 +114,29 @@
      #blobview は他 room(docs 等)も window.tpBlob 経由で使う汎用オーバーレイなので core に残す。 */
   #blobview{position:fixed;inset:0;background:var(--bg);z-index:30;display:none;flex-direction:column}
   #blobview.on{display:flex}
-  #blobview .bv-bar{display:flex;gap:8px;align-items:center;padding:calc(10px + var(--sat)) 12px 10px;border-bottom:1px solid var(--line);background:#0e1326;flex:none;box-sizing:border-box}
+  #blobview .bv-bar{display:flex;gap:8px;align-items:center;padding:calc(10px + var(--sat)) 12px 10px;border-bottom:1px solid var(--line);background:var(--card);flex:none;box-sizing:border-box}
   #blobview .bv-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--fs-body);color:var(--fg);font-family:var(--font-ui)}
   #blobview .bv-bar button{min-height:44px;font-size:var(--fs-body);font-family:var(--font-ui);flex:none}
   #blobview .bv-body{flex:1;display:flex;align-items:center;justify-content:center;overflow:auto;box-sizing:border-box}
-  #blobview .bv-body iframe,#blobview .bv-body object{width:100%;height:100%;border:0;background:#fff}
+  #blobview .bv-body iframe,#blobview .bv-body object{width:100%;height:100%;border:0;background:var(--img-bg)}
   #blobview .bv-body img{max-width:100%;max-height:100%;object-fit:contain;display:block;margin:auto}
   /* ブリーフィング編集オーバーレイ(2026-09-24: prompt() は iPhone で1行しか見えず編集できなかったため全画面に)。
      vault room の #files 同様 .tp-overlay を付けて swipeOverlayOpen() に拾わせる。room 側 CSS には依存しない(vault は任意) */
-  #brief{position:fixed;inset:0;background:#0e1326;z-index:30;display:none;flex-direction:column;box-shadow:0 0 0 100vh #0e1326}   /* 影で下にも塗る: キーボード上の半透明の帯の裏にスレ本文が透けていた(2026-09-24 IMG_5880) */
+  #brief{position:fixed;inset:0;background:var(--card);z-index:30;display:none;flex-direction:column;box-shadow:0 0 0 100vh var(--card)}   /* 影で下にも塗る: キーボード上の半透明の帯の裏にスレ本文が透けていた(2026-09-24 IMG_5880) */
   #brief.on{display:flex}
-  #brief .top{display:flex;gap:8px;align-items:center;padding:calc(10px + var(--sat)) 12px 10px;border-bottom:1px solid var(--line);background:#0e1326;flex:none;box-sizing:border-box}
+  #brief .top{display:flex;gap:8px;align-items:center;padding:calc(10px + var(--sat)) 12px 10px;border-bottom:1px solid var(--line);background:var(--card);flex:none;box-sizing:border-box}
   #brief .top .ttl{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--fs-body);color:var(--fg);font-family:var(--font-ui)}
   #brief .top button{min-height:44px;font-size:var(--fs-body);font-family:var(--font-ui);flex:none}
   #brief .hint{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:6px 12px;font-size:var(--fs-sub);color:var(--dim);flex:none;box-sizing:border-box}
   #brief .hint .cnt{flex:none;white-space:nowrap;font-family:var(--font-mono)}
-  #brief textarea{flex:1;min-height:0;box-sizing:border-box;margin:0 12px calc(12px + var(--sab));background:#0b1020;color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:10px;font-size:var(--fs-body);line-height:var(--lh);font-family:var(--font-ui);white-space:pre-wrap;word-wrap:break-word;overflow-wrap:break-word;overflow-x:hidden;resize:none;outline:none}
+  #brief textarea{flex:1;min-height:0;box-sizing:border-box;margin:0 12px calc(12px + var(--sab));background:var(--bg2);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:10px;font-size:var(--fs-body);line-height:var(--lh);font-family:var(--font-ui);white-space:pre-wrap;word-wrap:break-word;overflow-wrap:break-word;overflow-x:hidden;resize:none;outline:none}
   .attach{display:flex;gap:6px;align-items:center;flex-wrap:wrap;width:100%;font-size:var(--fs-small);color:var(--dim)}
   .attach:empty{display:none}
-  .attach .chip{position:relative;background:#131a33;border:1px solid var(--line);border-radius:12px;padding:3px 9px;color:var(--fg);max-width:60vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .attach .chip{position:relative;background:var(--bg3);border:1px solid var(--line);border-radius:12px;padding:3px 9px;color:var(--fg);max-width:60vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .attach .chip b{color:var(--warn);margin-left:6px;cursor:pointer}
   .attach .chip .bar{position:absolute;left:0;bottom:0;height:2px;background:var(--acc);width:0%;border-radius:0 0 12px 12px}
   .attach .chip .pct{color:var(--dim);margin-left:4px}
-  .attach .chip.error{border-color:var(--warn);background:rgba(255,107,122,.14)}
+  .attach .chip.error{border-color:var(--warn);background:var(--tint-warn)}
   .attach .chip .err{color:var(--warn);margin-left:6px}
   button.clip{padding:8px 10px}
   input[type=file]{display:none}
@@ -137,30 +144,37 @@
   #cards:empty{display:none}
   .chatlog table{font-family:var(--font-ui);border-collapse:collapse;font-size:14px;width:100%}
   .chatlog th,.chatlog td{border:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top;white-space:normal;min-width:80px;line-height:var(--lh)}
-  .chatlog th{color:#9ec1ff;font-weight:600;background:#0b1020}
+  .chatlog th{color:var(--title-accent);font-weight:600;background:var(--bg2)}
   .chatlog .tbl{overflow-x:auto;-webkit-overflow-scrolling:touch;margin:2px 0}
-  #toast{position:fixed;left:12px;right:12px;bottom:calc(80px + var(--sab));z-index:9;display:none;background:rgba(14,19,38,.96);border:1px solid var(--line);border-left:3px solid var(--ok);border-radius:14px;padding:12px 14px;font-size:var(--fs-body);box-shadow:0 8px 24px rgba(0,0,0,.45)}
+  #toast{position:fixed;left:12px;right:12px;bottom:calc(80px + var(--sab));z-index:9;display:none;background:var(--toast-bg);border:1px solid var(--line);border-left:3px solid var(--ok);border-radius:14px;padding:12px 14px;font-size:var(--fs-body);box-shadow:var(--sheet-shadow)}
   #toast.on{display:block}
   #toast.need{border-left-color:var(--warn)} #toast.dead{border-left-color:var(--dead)}
   #toast .t{font-weight:600;margin-bottom:2px} #toast .b{color:var(--sub);font-size:var(--fs-sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .chatlog .me,.chatlog .re,.chatlog .tool,.tail,#tQuestion{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}
   .chatlog .re,.chatlog .me{position:relative}
   .chatlog .copy{display:block;margin:4px 0 0 auto;font-size:var(--fs-small);opacity:.5;background:transparent;border:0;padding:6px 4px;color:var(--dim)}
-  .chatlog a{color:#7fb0ff;word-break:break-all}
+  .chatlog a{color:var(--link);word-break:break-all}
   /* ⋯ メニュー(ホーム/スレ共通の下シート) */
-  .menu{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:flex-end;z-index:9}
+  .menu{position:fixed;inset:0;background:var(--scrim);display:none;align-items:flex-end;z-index:9}
   .menu.on{display:flex}
-  .menu .sheet{box-sizing:border-box;background:#0e1326;border-top:1px solid var(--line);border-radius:18px 18px 0 0;padding:8px 8px calc(8px + var(--sab));width:100%}
+  .menu .sheet{box-sizing:border-box;background:var(--card);border-top:1px solid var(--line);border-radius:18px 18px 0 0;padding:8px 8px calc(8px + var(--sab));width:100%}
   .menu button{display:block;width:100%;box-sizing:border-box;text-align:left;background:transparent;border:0;border-top:1px solid var(--line);color:var(--fg);padding:14px 12px;font-size:var(--fs-body);font-family:var(--font-ui);border-radius:0;min-height:48px}
   .menu button:first-child{border-top:0}
-  .menu button.cancel{color:var(--dim);text-align:center;margin-top:6px;border-top:0;border-radius:10px;background:#131a33}
+  .menu button.cancel{color:var(--dim);text-align:center;margin-top:6px;border-top:0;border-radius:10px;background:var(--bg3)}
   .menu button.warn{color:var(--warn)}
+  /* 配色の選択(2026-09-27)。他の項目のような全幅ボタンではなく、1行に3択並べる小さな切替 */
+  .theme-row{display:flex;align-items:center;gap:8px;padding:10px 12px;border-top:1px solid var(--line)}
+  .theme-row-label{font-size:var(--fs-sub);color:var(--dim);flex:none}
+  .theme-row-opts{flex:1;display:flex;gap:6px;min-width:0}
+  .theme-row-opts button{flex:1;min-width:0;background:var(--bg3);color:var(--dim);border:1px solid var(--line);border-radius:9px;padding:8px 4px;font-size:var(--fs-small);font-family:var(--font-ui);min-height:36px}
+  .theme-row-opts button.on{color:var(--fg);border-color:var(--acc);background:var(--btn-bg)}
   #roomWarn{font-size:var(--fs-sub);color:var(--warn);padding:2px 4px 8px}
-  a.pimg{word-break:break-all;color:#7fb0ff}
-  .pimg-th{display:block;max-width:180px;max-height:140px;margin:6px 0 4px;border-radius:8px;border:1px solid var(--line);object-fit:contain;background:#0b1020;cursor:zoom-in}
+  a.pimg{word-break:break-all;color:var(--link)}
+  .pimg-th{display:block;max-width:180px;max-height:140px;margin:6px 0 4px;border-radius:8px;border:1px solid var(--line);object-fit:contain;background:var(--thumb-bg);cursor:zoom-in}
 </style>
 </head>
 <body>
+<script src="/theme.js"></script>
 
 <!-- ================= 画面1: ホーム ================= -->
 <div id="home" class="screen on">
@@ -207,6 +221,16 @@
   <button data-act="workout">🏋️ ワークアウト</button>
   <button data-act="num">📊 数字</button>
   <button data-act="newthread">+ 新しいスレを立てる</button>
+  <!-- 配色の選択(2026-09-27)。core/static/theme.js が data-theme-opt のクリックを拾う。
+       localStorage は端末ごと(このメニューは全ページ共通のキーを見るので、他のページを開いても同じ選択になる)。 -->
+  <div class="theme-row" id="themeRow">
+    <span class="theme-row-label">表示</span>
+    <div class="theme-row-opts">
+      <button type="button" data-theme-opt="auto">端末に合わせる</button>
+      <button type="button" data-theme-opt="light">ライト</button>
+      <button type="button" data-theme-opt="dark">ダーク</button>
+    </div>
+  </div>
   <button class="cancel" data-act="close">閉じる</button>
 </div></div>
 <div id="threadMenu" class="menu"><div class="sheet">
@@ -312,15 +336,34 @@ async function poll(){
   updateErr();
 }
 const NEEDS=['approval','trust','choice','login','dead','typed'];
+// 状態→色(hsl の "H S% L%" 部分)。スレ一覧の点(すぐ下)と惑星の描画(frameBody 内)が共有する。
+// 色相(状態の意味。idle=緑・working=黄・要対応=赤紫・typed=青・dead=灰)はテーマで変えないが、
+// ライトは背景が白に近いぶん明度を落として彩度はそのまま保つ(2026-09-27 ライトテーマ。
+// 「惑星・心臓の状態色は見分けが付くこと」の要件)。
+const STATE_HSL_DARK={idle:[150,80,70],working:[45,100,70],approval:[350,100,70],trust:[350,100,70],choice:[350,100,70],login:[350,100,70],typed:[215,100,80],dead:[230,10,45],unknown:[230,10,60]};
+const STATE_HSL_LIGHT={idle:[150,60,30],working:[36,90,40],approval:[340,70,42],trust:[340,70,42],choice:[340,70,42],login:[340,70,42],typed:[220,75,45],dead:[230,10,58],unknown:[230,10,46]};
+function stateHsl(state){
+  const light=window.TP_THEME&&TP_THEME.mode==='light';
+  const table=light?STATE_HSL_LIGHT:STATE_HSL_DARK;
+  const t=table[state]||table.unknown;
+  return t[0]+' '+t[1]+'% '+t[2]+'%';
+}
+// 惑星の「光の滲み」(pg グラデーション・彗星の尾)専用の色(2026-09-27)。スレ一覧の点・惑星の丸
+// (stateHsl。読みやすさ優先で暗め)とは別に、ライトはここだけ中間の明るさにする。白背景に暗い色を
+// 薄く重ねると煤けたグレーの染みになってしまい(実機確認)、「柔らかい光」に見えないため。
+const STATE_HSL_LIGHT_GLOW={idle:[150,60,62],working:[36,90,60],approval:[345,75,62],trust:[345,75,62],choice:[345,75,62],login:[345,75,62],typed:[220,80,62],dead:[230,10,60],unknown:[230,10,55]};
+function stateGlowHsl(state){
+  if(!(window.TP_THEME&&TP_THEME.mode==='light')) return stateHsl(state);
+  const t=STATE_HSL_LIGHT_GLOW[state]||STATE_HSL_LIGHT_GLOW.unknown;
+  return t[0]+' '+t[1]+'% '+t[2]+'%';
+}
 // スレ一覧(司令室の入口)。惑星の下に、畳まず全件並べる。直近に動いた順
-// 色は惑星の描画(下の frameBody 内)にある stCol と同じ値をそのまま複製(新しい色は決めない)
 const THREAD_STATE_JA={working:'作業中',idle:'待機',approval:'承認待ち',trust:'承認待ち',choice:'承認待ち',login:'承認待ち',typed:'未送信あり',dead:'停止'};
-const THREAD_STCOL={idle:'150 80% 70%',working:'45 100% 70%',approval:'350 100% 70%',trust:'350 100% 70%',choice:'350 100% 70%',login:'350 100% 70%',typed:'215 100% 80%',dead:'230 10% 45%',unknown:'230 10% 60%'};
 const threadListEl=document.getElementById('threadList');
 function renderThreadList(){
   if(!threadListEl) return;
   const sorted=sessions.slice().sort((a,b)=>a.last_activity_s-b.last_activity_s);
-  threadListEl.innerHTML=sorted.map(s=>`<div class="th-row" data-w="${s.window}"><span class="th-dot" style="background:hsl(${THREAD_STCOL[s.state]||THREAD_STCOL.unknown})"></span><span class="th-name">${esc(s.name)}</span><span class="th-st">${THREAD_STATE_JA[s.state]||'不明'}</span></div>`).join('');
+  threadListEl.innerHTML=sorted.map(s=>`<div class="th-row" data-w="${s.window}"><span class="th-dot" style="background:hsl(${stateHsl(s.state)})"></span><span class="th-name">${esc(s.name)}</span><span class="th-st">${THREAD_STATE_JA[s.state]||'不明'}</span></div>`).join('');
 }
 function stopConfirmText(s){
   if(s.window==='rc'||s.name==='rc') return 'rc を閉じます。復帰対象からも外します。ただし rc は次にログオンしたときに start-claude.sh が立て直します。';
@@ -402,7 +445,7 @@ function render(d){
   const savedTails={}; cards.querySelectorAll('.tail[data-w]').forEach(t=>{savedTails[t.dataset.w]=t;});
   cards.innerHTML=o.map(s=>`
     <div class="card ${s.state} open" data-w="${s.window}">
-      ${(s.agents||[]).length?`<div class="btns" style="margin:8px 12px 0;padding:0 4px;box-sizing:border-box">${s.agents.map(a=>`<span class="chip" style="background:#131a33;border:1px solid var(--line);border-radius:12px;padding:4px 9px;font-size:var(--fs-small)">🛰 ${esc(a.desc||a.kind)}${a.elapsed?` <span style="color:var(--dim)">${esc(a.elapsed)}</span>`:''}</span>`).join('')}</div>`:''}
+      ${(s.agents||[]).length?`<div class="btns" style="margin:8px 12px 0;padding:0 4px;box-sizing:border-box">${s.agents.map(a=>`<span class="chip" style="background:var(--bg3);border:1px solid var(--line);border-radius:12px;padding:4px 9px;font-size:var(--fs-small)">🛰 ${esc(a.desc||a.kind)}${a.elapsed?` <span style="color:var(--dim)">${esc(a.elapsed)}</span>`:''}</span>`).join('')}</div>`:''}
       <div class="tail" data-w="${s.window}"></div>
       <div class="cardsend"><div class="attach" data-att-for="${s.window}"></div><div class="row2">${s.pid?`<textarea rows="1" data-w="${s.window}" placeholder="${esc(s.name)} に送る"></textarea><button class="clip" data-att="${s.window}">📎</button><button class="pri csend" data-w="${s.window}">送信</button>`:`<span class="none sp">停止中のスレです</span>`}</div></div>
     </div>`).join('');
@@ -1130,17 +1173,23 @@ function frameBody(now){
   const hr=new Date().getHours()+new Date().getMinutes()/60, day=0.5-0.5*Math.cos((hr-4)/24*Math.PI*2);
   const hue=lerp(day,235,185), hue2=lerp(day,280,40);
   if(W<40||H<40){return;}   // 折りたたみの途中など、極端に小さい間は描かない(負の半径で例外になる)
+  // ライト/ダークで惑星キャンバスの見せ方を変える(2026-09-27)。色相(hue・状態の色)はどちらも
+  // 同じにして「意味」は変えず、明度・彩度・不透明度だけをライトの白背景向けに調整する
+  // (要件: 淡い軌道・控えめな光・読める名札・状態色は見分けが付くこと)。window.TP_THEME は
+  // core/static/theme.js が ⋯メニューの選択と端末配色(matchMedia)から毎回更新している。
+  const light=!!(window.TP_THEME&&TP_THEME.mode==='light');
   const nS=Math.max(1,sessions.length); const cx=W/2, cy=H/2, R=Math.max(8,Math.min(Math.min(W,H)*0.27,(H/2-26)/(1.05+0.38*(nS-1)),(W/2-70)/(1.05+0.38*(nS-1))));   // ラベル分の余白を横にも確保
-  ctx.fillStyle=`hsl(${hue} 45% 5%)`; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle=light?`hsl(${hue} 38% 95%)`:`hsl(${hue} 45% 5%)`; ctx.fillRect(0,0,W,H);
   // 粒子(プロセス数)
   ensureParts(Math.min(PART_MAX,Math.round(view.procs*2.5))); const sp=10+view.load*60;
-  ctx.fillStyle=`hsla(${hue} 80% 80% / .35)`;
+  ctx.fillStyle=light?`hsla(${hue} 45% 35% / .16)`:`hsla(${hue} 80% 80% / .35)`;
   for(const p of parts){const a=noise(p.x*0.003+T*0.05,p.y*0.003)*Math.PI*2;p.x+=Math.cos(a)*sp*dt;p.y+=Math.sin(a)*sp*dt;
-    if(p.x<0)p.x+=W;if(p.x>W)p.x-=W;if(p.y<0)p.y+=H;if(p.y>H)p.y-=H;ctx.globalAlpha=0.25+0.5*p.l;ctx.fillRect(p.x,p.y,1.2,1.2);}
+    if(p.x<0)p.x+=W;if(p.x>W)p.x-=W;if(p.y<0)p.y+=H;if(p.y>H)p.y-=H;ctx.globalAlpha=(light?0.2:0.25)+0.5*p.l;ctx.fillRect(p.x,p.y,1.2,1.2);}
   ctx.globalAlpha=1;
-  // 年輪(稼働6時間ごと)
+  // 年輪(稼働6時間ごと)。ライトは「淡い軌道」の指示どおり、薄いグレーがかった線に
   const rings=Math.min(60,Math.floor(view.uptime/21600)); ctx.lineWidth=1;
-  for(let i=1;i<=rings;i++){const rr=R*1.15+i*Math.max(3,(Math.min(W,H)/2-R*1.2)/62);ctx.strokeStyle=`hsla(${hue} 60% 70% / ${0.05+0.05*(i%4===0)})`;ctx.beginPath();ctx.arc(cx,cy,rr,0,Math.PI*2);ctx.stroke();}
+  for(let i=1;i<=rings;i++){const rr=R*1.15+i*Math.max(3,(Math.min(W,H)/2-R*1.2)/62); const a=0.05+0.05*(i%4===0);
+    ctx.strokeStyle=light?`hsla(${hue} 30% 45% / ${a*0.6})`:`hsla(${hue} 60% 70% / ${a})`;ctx.beginPath();ctx.arc(cx,cy,rr,0,Math.PI*2);ctx.stroke();}
   // 心臓: 全セッションの状態で色と鼓動が変わる。停止/エラー=赤(ゆっくり) > 入力待ち=紫(二拍) > 作業中=黄(鼓動) > 全て待機=緑(静止)
   const agg=sessions.some(s=>s.state==='dead')?'dead':sessions.some(s=>['approval','trust','choice','login'].includes(s.state))?'need':sessions.some(s=>s.state==='working')?'working':'idle';
   const heartHue={idle:150,working:45,need:290,dead:0}[agg];
@@ -1150,36 +1199,42 @@ function frameBody(now){
   else if(agg==='dead'){beat+=dt*0.35; pulse=0.5+0.5*Math.sin(beat*Math.PI*2);}
   else {beat=0;}
   const core=Math.max(4,R*(0.45+view.mem/100*0.5)*(1+pulse*0.08)), rough=agg==='idle'?view.cpu/300:view.cpu/100; coreR=core;
-  const g=ctx.createRadialGradient(cx,cy,core*0.2,cx,cy,core*2.2); g.addColorStop(0,`hsla(${heartHue} 90% 60% / ${(agg==='idle'?0.22:0.32)+pulse*0.28})`); g.addColorStop(1,'transparent');
+  // ライトは白背景で薄い光が消えるぶん明度を下げ、その代わり少しだけ不透明度を上げて「控えめだが見える」に
+  const heartGradL=light?46:60, heartRingL0=light?46:72, heartRingStep=light?8:12, heartFillL=light?42:50;
+  const g=ctx.createRadialGradient(cx,cy,core*0.2,cx,cy,core*2.2); g.addColorStop(0,`hsla(${heartHue} ${light?70:90}% ${heartGradL}% / ${((agg==='idle'?0.22:0.32)+pulse*0.28)*(light?0.85:1)})`); g.addColorStop(1,'transparent');
   ctx.fillStyle=g; ctx.beginPath(); ctx.arc(cx,cy,core*2.2,0,Math.PI*2); ctx.fill();
   for(let layer=0;layer<3;layer++){ctx.beginPath();
     for(let i=0;i<=180;i++){const a=i/180*Math.PI*2,n=noise(Math.cos(a)*1.6+layer*7+T*0.4,Math.sin(a)*1.6+T*0.3),rr=core*(1+layer*0.12)*(1+n*(0.05+rough*0.35));const x=cx+Math.cos(a)*rr,y=cy+Math.sin(a)*rr;i?ctx.lineTo(x,y):ctx.moveTo(x,y);}
-    ctx.closePath(); ctx.strokeStyle=`hsla(${heartHue} 85% ${72-layer*12}% / ${0.6-layer*0.15})`; ctx.lineWidth=1.5-layer*0.4; ctx.stroke();
-    if(layer===0){ctx.fillStyle=`hsla(${heartHue} 80% 50% / ${0.14+pulse*0.12})`;ctx.fill();}}
+    ctx.closePath(); ctx.strokeStyle=`hsla(${heartHue} 85% ${heartRingL0-layer*heartRingStep}% / ${0.6-layer*0.15})`; ctx.lineWidth=1.5-layer*0.4; ctx.stroke();
+    if(layer===0){ctx.fillStyle=`hsla(${heartHue} 80% ${heartFillL}% / ${0.14+pulse*0.12})`;ctx.fill();}}
   // 中心の文字は出さない(2026-09-22)。ここは中核(heart)で、セッションの Main とは別物。
   // 惑星のタップで Main を開く動作が無くなったあとは何も指しておらず、軌道上の Main の
   // 名札と同じ語が2つ並んで「二重に見える」と指摘があった。中核は金色で見分けが付く。
-  // 惑星(セッション): 軌道=順番, 大きさ=生存時間, 光=CPU時間の割合, 色=状態
+  // 惑星(セッション): 軌道=順番, 大きさ=生存時間, 光=CPU時間の割合, 色=状態(stateHsl はスレ一覧の点と共有。上のほうで定義)
   const totalCpu=sessions.reduce((s,x)=>s+x.cpu_s,0)||1;
-  const stCol={idle:'150 80% 70%',working:'45 100% 70%',approval:'350 100% 70%',trust:'350 100% 70%',choice:'350 100% 70%',login:'350 100% 70%',typed:'215 100% 80%',dead:'230 10% 45%',unknown:'230 10% 60%'};
+  // 衛星(サブエージェント)の金色もライトでは濃くする(白背景だと薄い金は消えるため)
+  const satHue=light?36:45, satSat=light?85:100, satRingL=light?42:70, satDotBase=light?36:68, satDotStep=light?6:8;
   sessions.forEach((s,i)=>{const orbit=R*1.05+i*R*0.38; s.ang+=dt*(0.12+view.load*0.2)/(1+i*0.6);
     // 2026-09-26: 2日ほど動いたスレで直径25px になり、丸どうし・名札と重なっていたので6割に
-    const size=Math.max(2,(s.pid?4+Math.log10(1+s.age_s/60)*2.4:3)*0.6); s.plSize=size; s.glow+=(s.cpu_s/totalCpu-s.glow)*dt; const col=stCol[s.state]||stCol.unknown;
-    ctx.strokeStyle=`hsla(${hue} 70% 80% / .12)`; ctx.lineWidth=1; ctx.beginPath(); ctx.arc(cx,cy,orbit,0,Math.PI*2); ctx.stroke();
+    const size=Math.max(2,(s.pid?4+Math.log10(1+s.age_s/60)*2.4:3)*0.6); s.plSize=size; s.glow+=(s.cpu_s/totalCpu-s.glow)*dt; const col=stateGlowHsl(s.state);
+    ctx.strokeStyle=light?`hsla(${hue} 30% 40% / .10)`:`hsla(${hue} 70% 80% / .12)`; ctx.lineWidth=1; ctx.beginPath(); ctx.arc(cx,cy,orbit,0,Math.PI*2); ctx.stroke();
     const x=cx+Math.cos(s.ang)*orbit, y=cy+Math.sin(s.ang)*orbit; s.px=x; s.py=y;
     ctx.beginPath(); for(let k=0;k<40;k++){const a=s.ang-k*0.012*(1+view.load),px=cx+Math.cos(a)*orbit,py=cy+Math.sin(a)*orbit;k?ctx.lineTo(px,py):ctx.moveTo(px,py);}
-    ctx.strokeStyle=`hsla(${col} / ${0.15+s.glow*0.5})`; ctx.lineWidth=size*0.5; ctx.lineCap='round'; ctx.stroke();
-    const pg=ctx.createRadialGradient(x,y,0,x,y,size*3); pg.addColorStop(0,`hsla(${col} / ${0.35+s.glow*0.4})`); pg.addColorStop(1,'transparent');   // 光のにじみも控えめに(9/26)
+    ctx.strokeStyle=`hsla(${col} / ${(0.15+s.glow*0.5)*(light?0.9:1)})`; ctx.lineWidth=size*0.5; ctx.lineCap='round'; ctx.stroke();
+    const pg=ctx.createRadialGradient(x,y,0,x,y,size*3); pg.addColorStop(0,`hsla(${col} / ${(0.35+s.glow*0.4)*(light?0.9:1)})`); pg.addColorStop(1,'transparent');   // 光のにじみも控えめに(9/26。ライトは丸自体を状態色にしたので、滲みは中間の明るさの色で「淡い光」に留める)
     ctx.fillStyle=pg; ctx.beginPath(); ctx.arc(x,y,size*3,0,Math.PI*2); ctx.fill();
     // 衛星 = 実行中のサブエージェント。水平の細い楕円(9/25: 斜め→水平・控えめな大きさ)で、奥側を通るときは惑星の後ろに隠れる
     const ag=(s.agents||[]).length, tilt=0, sats=[];
     for(let k=0;k<ag;k++){const a=T*2.6+k*(Math.PI*2/ag)+i; const rr=size*2.8+k*3; const ex=Math.cos(a)*rr, ey=Math.sin(a)*rr*0.32;
       const mx=x+ex*Math.cos(tilt)-ey*Math.sin(tilt), my=y+ex*Math.sin(tilt)+ey*Math.cos(tilt); sats.push({mx,my,back:Math.sin(a)<0,depth:Math.sin(a)});}
-    if(ag){ctx.save(); ctx.translate(x,y); ctx.rotate(tilt); ctx.strokeStyle='hsla(45 100% 70% / .3)'; ctx.lineWidth=1; for(let k=0;k<ag;k++){const rr=size*2.8+k*3; ctx.beginPath(); ctx.ellipse(0,0,rr,rr*0.32,0,0,Math.PI*2); ctx.stroke();} ctx.restore();}
+    if(ag){ctx.save(); ctx.translate(x,y); ctx.rotate(tilt); ctx.strokeStyle=`hsla(${satHue} ${satSat}% ${satRingL}% / .3)`; ctx.lineWidth=1; for(let k=0;k<ag;k++){const rr=size*2.8+k*3; ctx.beginPath(); ctx.ellipse(0,0,rr,rr*0.32,0,0,Math.PI*2); ctx.stroke();} ctx.restore();}
     // 2026-09-25: 半径2px では惑星(9/22 に大きくした)に埋もれて「衛星が一度も見えない」と言われたので、点と光を大きく
-    const drawSat=(q)=>{const r=Math.max(3,size*0.32)+q.depth*0.6, gr=r*3.4; const sg=ctx.createRadialGradient(q.mx,q.my,0,q.mx,q.my,gr); sg.addColorStop(0,'hsla(45 100% 70% / .8)'); sg.addColorStop(1,'transparent'); ctx.fillStyle=sg; ctx.beginPath(); ctx.arc(q.mx,q.my,gr,0,Math.PI*2); ctx.fill(); ctx.fillStyle=`hsl(45 100% ${68+q.depth*8}%)`; ctx.beginPath(); ctx.arc(q.mx,q.my,r,0,Math.PI*2); ctx.fill();};
+    const drawSat=(q)=>{const r=Math.max(3,size*0.32)+q.depth*0.6, gr=r*3.4; const sg=ctx.createRadialGradient(q.mx,q.my,0,q.mx,q.my,gr); sg.addColorStop(0,`hsla(${satHue} ${satSat}% ${satRingL}% / .8)`); sg.addColorStop(1,'transparent'); ctx.fillStyle=sg; ctx.beginPath(); ctx.arc(q.mx,q.my,gr,0,Math.PI*2); ctx.fill(); ctx.fillStyle=`hsl(${satHue} ${satSat}% ${satDotBase+q.depth*satDotStep}%)`; ctx.beginPath(); ctx.arc(q.mx,q.my,r,0,Math.PI*2); ctx.fill();};
     sats.filter(q=>q.back).forEach(drawSat);
-    ctx.fillStyle=s.pid?'#fff':'#667'; ctx.beginPath(); ctx.arc(x,y,size,0,Math.PI*2); ctx.fill();
+    // ライトは丸そのものも状態色にする(2026-09-27)。ダークは白背景が無く光の滲みだけで状態が
+    // 読めるが、ライトは淡い滲みだけだと丸の上では状態が分かりにくいため、丸の塗りをスレ一覧の
+    // 点(stateHsl。読みやすい暗めの彩度)と揃える。ダークは元のまま(白=生存中/灰=停止中)。
+    ctx.fillStyle=light?`hsl(${stateHsl(s.state)})`:(s.pid?'#fff':'#667'); ctx.beginPath(); ctx.arc(x,y,size,0,Math.PI*2); ctx.fill();
     sats.filter(q=>!q.back).forEach(drawSat);
     });
   // 軌道上の名札(スレ名): 2026-09-22に復活(惑星が大きく間隔も空いたため)。惑星・軌道・衛星の計算は
@@ -1211,7 +1266,7 @@ function frameBody(now){
         if(rect.x<2||rect.y<2||rect.x+rect.w>W-2||rect.y+rect.h>H-2) continue;   // 端からはみ出す位置は不可
         if(placed.some(p=>rect.x<p.x+p.w&&p.x<rect.x+rect.w&&rect.y<p.y+p.h&&p.y<rect.y+rect.h)) continue;   // 既存の名札と重なるなら不可
         placed.push(rect);
-        ctx.fillStyle='hsla(0 0% 100% / .82)'; ctx.textAlign=c.align; ctx.fillText(text, c.x, c.y);
+        ctx.fillStyle=light?'hsla(230 30% 16% / .82)':'hsla(0 0% 100% / .82)'; ctx.textAlign=c.align; ctx.fillText(text, c.x, c.y);
         done=true; break;
       }
       // done===false: どこに置いても重なる/はみ出すので、この名札は描かない

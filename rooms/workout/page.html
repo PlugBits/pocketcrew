@@ -2,14 +2,18 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8">
+<!-- 配色(ライト/ダーク)の初回ペイント前の適用(core/static/theme.js の THEME_BOOT_SNIPPET と同文面) -->
+<script>(function(){try{var v=localStorage.getItem('tp.theme');var m=(v==='light'||v==='dark')?v:(matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',m);}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#070a14">
+<meta name="theme-color" content="#070a14" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f4f5f9" media="(prefers-color-scheme: light)">
+<link rel="stylesheet" href="/theme.css">
 <title>ポケクル · workout</title>
 <style>
-  :root{--bg:#070a14;--fg:#e8ecf5;--sub:#a9b3cc;--dim:#8892b0;--card:#0e1326;--line:#1b2340;--ok:#5fe0b0;--busy:#ffd166;--warn:#ff6b7a;--dead:#556;--acc:#5aa0ff;
-    --fs-body:16px;--fs-sub:13px;--fs-small:12px;--fs-title:18px;--fs-h1:22px;--lh:1.6;
+  /* 配色変数(--bg 等)は core/static/theme.css に一本化した(2026-09-27 ライトテーマ) */
+  :root{--fs-body:16px;--fs-sub:13px;--fs-small:12px;--fs-title:18px;--fs-h1:22px;--lh:1.6;
     --font-ui:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Noto Sans JP',sans-serif;--font-mono:Menlo,'SF Mono',ui-monospace,monospace;}
   html,body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font-ui);font-size:var(--fs-body);line-height:var(--lh);-webkit-text-size-adjust:100%}
   #wk-root{padding:calc(10px + env(safe-area-inset-top)) 12px calc(30px + env(safe-area-inset-bottom))}
@@ -30,7 +34,7 @@
   #wk-root .ex-select-row{display:flex;align-items:center;gap:8px;margin-bottom:10px}
   #wk-root .ex-select{flex:1;min-width:0;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:10px;padding:10px;font-size:16px;min-height:44px;-webkit-appearance:none;appearance:none}
   #wk-root .ex-nav{flex:none;width:44px;height:44px;background:var(--card);color:var(--fg);border:1px solid var(--line);border-radius:10px;font-size:16px;line-height:1}
-  #wk-root .ex-nav:active{background:#131a33}
+  #wk-root .ex-nav:active{background:var(--bg3)}
   #wk-root .ex-list{margin-top:8px}
   #wk-root .ex-list .ex-row{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px;font-size:var(--fs-sub);color:var(--sub);padding:8px 0;border-bottom:1px solid var(--line);line-height:var(--lh)}
   #wk-root .ex-list .ex-row:last-child{border-bottom:0}
@@ -43,7 +47,7 @@
   #wk-root .ex-list .diff.flat{color:var(--dim)}
   #wk-root .spark-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));gap:8px;margin-top:10px}
   #wk-root .spark-card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:9px 10px;cursor:pointer}
-  #wk-root .spark-card:active{background:#131a33}
+  #wk-root .spark-card:active{background:var(--bg3)}
   #wk-root .spark-card .nm{font-size:var(--fs-sub);color:var(--fg);margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   #wk-root .spark-card .rng{font-size:var(--fs-small);color:var(--dim);margin-top:3px}
   #wk-root .spark-card .rng b{color:var(--ok);font-weight:600}
@@ -56,7 +60,7 @@
   #wk-root .freq-title{font-size:var(--fs-sub);color:var(--fg);font-weight:600;margin:2px 0 6px}
   #wk-root .freq-row{display:flex;align-items:center;gap:8px;font-size:var(--fs-sub);padding:5px 0}
   #wk-root .freq-row .nm{width:104px;flex:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--fg)}
-  #wk-root .freq-row .bar{flex:1;height:8px;background:#131a33;border-radius:4px;overflow:hidden}
+  #wk-root .freq-row .bar{flex:1;height:8px;background:var(--bg3);border-radius:4px;overflow:hidden}
   #wk-root .freq-row .bar i{display:block;height:100%;background:var(--acc)}
   #wk-root .freq-row .n{width:38px;flex:none;text-align:right;color:var(--dim)}
   #wk-root .rec{border-bottom:1px solid var(--line);padding:10px 0}
@@ -79,14 +83,14 @@
   #wk-root .kpi-tiles{display:flex;gap:8px;flex-wrap:wrap}
   #wk-root .kpi-tile{flex:1 1 130px;min-width:118px;text-align:center;padding:6px 4px;border-radius:10px}
   #wk-root .kpi-tile.tap{cursor:pointer}
-  #wk-root .kpi-tile.tap:active{background:#131a33}
+  #wk-root .kpi-tile.tap:active{background:var(--bg3)}
   #wk-root .kpi-title{font-size:var(--fs-small);color:var(--dim);margin-bottom:2px;letter-spacing:.03em}
   #wk-root .kpi-num{font-size:28px;font-weight:700;color:var(--fg);line-height:1.15}
   #wk-root .kpi-lbl{font-size:var(--fs-small);color:var(--dim);margin-top:2px}
   #wk-root .kpi-empty{font-size:15px;font-weight:600;color:var(--dim);padding:9px 0 7px}
   #wk-root .kpi-weeks{display:flex;gap:3px;justify-content:center;margin:9px auto 0;width:117px}
   #wk-root .kpi-weeks .sq{width:12px;height:12px;border-radius:3px;border:1px solid var(--line);background:transparent;flex:none}
-  #wk-root .kpi-weeks .sq.c1{background:rgba(90,160,255,.4);border-color:transparent}
+  #wk-root .kpi-weeks .sq.c1{background:var(--kpi-c1);border-color:transparent}
   #wk-root .kpi-weeks .sq.c2{background:var(--acc);border-color:transparent}
   #wk-root .kpi-weekdates{display:flex;justify-content:space-between;font-size:var(--fs-small);color:var(--dim);margin:4px auto 0;width:117px}
 </style>
@@ -175,6 +179,7 @@
   addEventListener('pageshow',function(){document.body.style.transition='';document.body.style.transform='';});
 })();
 </script>
+<script src="/theme.js"></script>
 <script src="/workout.js"></script>
 </body>
 </html>

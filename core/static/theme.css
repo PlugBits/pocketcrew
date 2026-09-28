@@ -1,0 +1,114 @@
+/* ポケクル 配色(ライト/ダーク)。全ページ共有(core/static/index.html・各 room の page.html から
+   <link rel="stylesheet" href="/theme.css"> で読む)。
+
+   仕組み:
+     1. 既定は端末の配色(prefers-color-scheme)に従う。
+     2. ⋯メニューで「ライト/ダーク」を明示選択すると、各ページの <head> 先頭にある小さな
+        インラインスクリプト(初回ペイント前に同期実行。core/static/theme.js の THEME_BOOT_SNIPPET
+        と同文面を複製したもの)が <html> に data-theme="light"|"dark" を付け、下の
+        :root[data-theme=...] が勝つ。「端末に合わせる」を選ぶと data-theme 属性ごと外し、
+        @media (prefers-color-scheme) に戻る(core/static/theme.js の apply() 参照)。
+     3. 変数名はどのページでも同じにする(index.html のコメント参照・rooms/_template/page.html)。
+   色を増やすときはここに1箇所足すだけでよい(ページ側に直書きしない)。 */
+
+:root, :root[data-theme="dark"]{
+  color-scheme: dark;
+  /* 基調 */
+  --bg:#070a14; --fg:#e8ecf5; --sub:#a9b3cc; --dim:#8892b0;
+  --card:#0e1326; --line:#1b2340;
+  --bg2:#0b1020;      /* 入力欄・テキストエリア・表の見出しセルなど、bg よりわずかに明るい面 */
+  --bg3:#131a33;      /* チップ・押した状態・コードの背景など、card よりわずかに明るい面 */
+  /* 状態色 */
+  --ok:#5fe0b0; --busy:#ffd166; --warn:#ff6b7a; --dead:#556; --acc:#5aa0ff;
+  --c-note:#3987e5; --c-x:#d95926; --c-green:#199e70;
+  --ok-fg:#06251c;    /* --ok を背景にしたときの前景(完了チェックの文字など) */
+  /* 淡い色つきチップ(バッジ・pill の背景) */
+  --tint-warn:rgba(255,107,122,.14); --tint-busy:rgba(255,209,102,.14);
+  --tint-ok:rgba(95,224,176,.14); --tint-dim:rgba(111,122,153,.14);
+  /* ボタン */
+  --btn-bg:#1f2f5e; --btn-fg:#dfe7ff; --btn-line:#2c3f7a;
+  --pri-bg:#2f6fdb; --pri-fg:#fff; --pri-line:#4a86ea;
+  /* 吹き出し(自分の発言) */
+  --me-bg:#1b2a55; --me-fg:#dfe7ff;
+  /* 見出し等のアクセント文字色 */
+  --title-accent:#9ec1ff; --link:#7fb0ff;
+  /* オーバーレイ・シート・スクリム */
+  --scrim:rgba(0,0,0,.6);
+  --sheet-shadow:0 8px 24px rgba(0,0,0,.45);
+  --approval-bg:#120d18; --approval-line:#3a2340;
+  --tab-hl-bg:#182552;
+  --tool-bg:rgba(255,255,255,.02);
+  --hit-sel:rgba(255,255,255,.03);
+  --thumb-bg:#0b1020;
+  --canvas-bg:#070c18;
+  --img-bg:#fff;       /* 画像ビューア(透過PNG等の背景)。両テーマ共通で白のまま */
+  --img-shadow:0 2px 12px rgba(0,0,0,.25);
+  --cbcopy-ok-fg:#7de3b0; --cbcopy-ok-line:#2d6b52;
+  --kpi-c1:rgba(90,160,255,.4);
+  --toast-bg:rgba(14,19,38,.96);
+  --err-bg:rgba(7,10,20,.85);
+}
+
+:root[data-theme="light"]{
+  color-scheme: light;
+  --bg:#f4f5f9; --fg:#1c2130; --sub:#5b6478; --dim:#7b8296;
+  --card:#ffffff; --line:#dde1ec;
+  --bg2:#eef0f6; --bg3:#e7eaf3;
+  --ok:#1c9169; --busy:#a5710a; --warn:#c72e42; --dead:#8891a6; --acc:#2f6fdb;
+  --c-note:#2a63cc; --c-x:#b8481c; --c-green:#178055;
+  --ok-fg:#ffffff;
+  --tint-warn:rgba(199,46,66,.13); --tint-busy:rgba(165,113,10,.14);
+  --tint-ok:rgba(28,145,105,.13); --tint-dim:rgba(91,100,120,.12);
+  --btn-bg:#e7ecf9; --btn-fg:#1c2a54; --btn-line:#c7d2ea;
+  --pri-bg:#2f6fdb; --pri-fg:#fff; --pri-line:#5c8ce6;
+  --me-bg:#dceaff; --me-fg:#15294f;
+  --title-accent:#2a5cc7; --link:#2a5cc7;
+  --scrim:rgba(30,36,58,.4);
+  --sheet-shadow:0 8px 24px rgba(30,40,70,.16);
+  --approval-bg:#fbeef4; --approval-line:#f0cede;
+  --tab-hl-bg:#dee7fb;
+  --tool-bg:rgba(20,30,60,.04);
+  --hit-sel:rgba(20,30,60,.05);
+  --thumb-bg:#eef0f6;
+  --canvas-bg:#eef1f8;
+  --img-bg:#fff;
+  --img-shadow:0 2px 12px rgba(30,40,70,.14);
+  --cbcopy-ok-fg:#12805a; --cbcopy-ok-line:#9fe3c8;
+  --kpi-c1:rgba(47,111,219,.32);
+  --toast-bg:rgba(255,255,255,.97);
+  --err-bg:rgba(255,255,255,.9);
+}
+
+/* JS が間に合っていない/使えないときだけの保険(通常は各ページ先頭のインラインスクリプトが
+   data-theme を初回ペイント前に付けるので、この節が使われることはほぼ無い) */
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]):not([data-theme="light"]){
+    color-scheme: light;
+    --bg:#f4f5f9; --fg:#1c2130; --sub:#5b6478; --dim:#7b8296;
+    --card:#ffffff; --line:#dde1ec;
+    --bg2:#eef0f6; --bg3:#e7eaf3;
+    --ok:#1c9169; --busy:#a5710a; --warn:#c72e42; --dead:#8891a6; --acc:#2f6fdb;
+    --c-note:#2a63cc; --c-x:#b8481c; --c-green:#178055;
+    --ok-fg:#ffffff;
+    --tint-warn:rgba(199,46,66,.13); --tint-busy:rgba(165,113,10,.14);
+    --tint-ok:rgba(28,145,105,.13); --tint-dim:rgba(91,100,120,.12);
+    --btn-bg:#e7ecf9; --btn-fg:#1c2a54; --btn-line:#c7d2ea;
+    --pri-bg:#2f6fdb; --pri-fg:#fff; --pri-line:#5c8ce6;
+    --me-bg:#dceaff; --me-fg:#15294f;
+    --title-accent:#2a5cc7; --link:#2a5cc7;
+    --scrim:rgba(30,36,58,.4);
+    --sheet-shadow:0 8px 24px rgba(30,40,70,.16);
+    --approval-bg:#fbeef4; --approval-line:#f0cede;
+    --tab-hl-bg:#dee7fb;
+    --tool-bg:rgba(20,30,60,.04);
+    --hit-sel:rgba(20,30,60,.05);
+    --thumb-bg:#eef0f6;
+    --canvas-bg:#eef1f8;
+    --img-bg:#fff;
+    --img-shadow:0 2px 12px rgba(30,40,70,.14);
+    --cbcopy-ok-fg:#12805a; --cbcopy-ok-line:#9fe3c8;
+    --kpi-c1:rgba(47,111,219,.32);
+    --toast-bg:rgba(255,255,255,.97);
+    --err-bg:rgba(255,255,255,.9);
+  }
+}

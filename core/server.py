@@ -181,11 +181,14 @@ STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static") 
 # シェル版はファイル内容から自動算出する(手で上げ忘れて古い資産が配られる事故を防ぐ)。
 # サーバ起動のたびに再計算する(編集後は毎回再起動される運用のため)。room の資産(rooms.asset_files())
 # も合わせてハッシュに含める(room 側の更新でもシェル版が上がるように)。core 固有のファイルは
-# もう index.html・sw.js・manifest.json の3つだけ(他は全部 room 側が room.json の "assets" で持つ)。
+# index.html・sw.js・manifest.json・theme.css・theme.js(他は全部 room 側が room.json の "assets" で持つ)。
+# theme.css/theme.js は全ページ共有の配色(2026-09-27 ライトテーマ。core/static/theme.css 参照)。
 SHELL_ASSET_FILES = [
     os.path.join(STATIC_DIR, "index.html"),
     os.path.join(STATIC_DIR, "sw.js"),
     os.path.join(STATIC_DIR, "manifest.json"),
+    os.path.join(STATIC_DIR, "theme.css"),
+    os.path.join(STATIC_DIR, "theme.js"),
 ]
 # index.html 等が参照する script タグに ?v= を付けて配信時に書き換える処理は core/util.py に1本化
 # (room はそちらの util.versioned_html() を使う)。
@@ -205,7 +208,7 @@ def compute_shell_version():
 
 # sw.js のキャッシュ対象(SHELL 配列)。core 固定分(index.html自身とアイコン類)+ room 側
 # (rooms.shell_paths(): room.json の "cache" も含む)を足して重複を消す。
-_CORE_SHELL = ['/', '/manifest.json', '/icon-192.png', '/icon-512.png']
+_CORE_SHELL = ['/', '/manifest.json', '/icon-192.png', '/icon-512.png', '/theme.css', '/theme.js']
 
 
 def compute_shell_list():
@@ -258,7 +261,10 @@ def status():
 # room が出てきたら、core固定の新しいスレ(order 900)と order でマージして並べ直す。
 # vault(📁 vault・order 30)は core固定ではなく rooms/vault/room.json の "menu" が持つ
 # (段階: vault を公開サンプルの room にする。無効化すればこの項目も自然に消える)。
-_HOME_MENU_RE = re.compile(r'(<div id="homeMenu" class="menu"><div class="sheet">).*?(</div></div>)', re.S)
+# 2026-09-27: 末尾の検出は次の兄弟(#threadMenu)手前までの lookahead にした(非貪欲の
+# ".*?(</div></div>)" のままだと、間に挟む要素(配色の選択行など)が入れ子の </div></div> を
+# 含むと、そこで早期に一致して閉じるボタンより後ろが宙に浮いていた。実機で確認)。
+_HOME_MENU_RE = re.compile(r'(<div id="homeMenu" class="menu"><div class="sheet">).*?(</div></div>)(?=\s*<div id="threadMenu")', re.S)
 
 
 def _home_menu_html():
@@ -273,6 +279,16 @@ def _home_menu_html():
         else:
             href = html.escape(it.get("href", ""), quote=True)
             parts.append(f'<button data-href="{href}">{label}</button>')
+    # 配色の選択(2026-09-27)。ホームの ⋯ メニューだけに出す(要件参照)。room 一覧とは無関係に
+    # 常に足す(core/static/theme.js が data-theme-opt のクリックを拾う。localStorage は共通)。
+    parts.append(
+        '<div class="theme-row" id="themeRow"><span class="theme-row-label">表示</span>'
+        '<div class="theme-row-opts">'
+        '<button type="button" data-theme-opt="auto">端末に合わせる</button>'
+        '<button type="button" data-theme-opt="light">ライト</button>'
+        '<button type="button" data-theme-opt="dark">ダーク</button>'
+        '</div></div>'
+    )
     parts.append('<button class="cancel" data-act="close">閉じる</button>')
     return "".join(parts)
 
@@ -549,6 +565,15 @@ class H(BaseHTTPRequestHandler):
         elif u.path == "/manifest.json":
             with open(os.path.join(STATIC_DIR, "manifest.json"), "rb") as f:
                 self._send(200, "application/manifest+json", f.read(), {"X-Shell-Version": SHELL_VERSION})
+        elif u.path == "/theme.css":
+            # 配色(ライト/ダーク)の共有 CSS。全ページが <link rel="stylesheet" href="/theme.css?v=..."> で読む
+            # (2026-09-27 ライトテーマ。core/static/theme.css 参照。?v= は core/util.py の _versioned_html が付ける)。
+            with open(os.path.join(STATIC_DIR, "theme.css"), "rb") as f:
+                self._send(200, "text/css; charset=utf-8", f.read(), {"X-Shell-Version": SHELL_VERSION})
+        elif u.path == "/theme.js":
+            # 配色の切り替えロジック(⋯メニュー配線・端末配色への追従)。core/static/theme.js 参照
+            with open(os.path.join(STATIC_DIR, "theme.js"), "rb") as f:
+                self._send(200, "application/javascript; charset=utf-8", f.read(), {"X-Shell-Version": SHELL_VERSION})
         elif u.path in ("/icon.svg", "/icon-192.png", "/icon-512.png"):
             fp = os.path.join(STATIC_DIR, u.path.lstrip("/"))
             if os.path.exists(fp):

@@ -36,7 +36,9 @@ SHELL = {"version": ""}
 # 後方互換の既定4本(room が1つも読めていない起動直後などでもこの4本には ?v= を付ける)。
 # 段階C: 実際の対象は core.rooms.active() から動的に集める(読み込めた room だけ・page.js/tab.js
 # が実在するものだけ)ので、新しい room を足しても ROOM.py 側の変更は要らない。
-_VERSIONED_SCRIPTS = ("plan", "docs", "workout", "note")
+# "theme" は room ではなく core/static/theme.js(配色の共有スクリプト。全ページの <script src="/theme.js">)。
+# room 名と衝突しない固定文字列なのでここに足すだけで済む(2026-09-27 ライトテーマ)。
+_VERSIONED_SCRIPTS = ("plan", "docs", "workout", "note", "theme")
 
 
 def _versioned_script_ids():
@@ -67,6 +69,9 @@ def _versioned_html(html_bytes, version, inject_meta=False):
     server.py の _versioned_html はこの実装をそのまま使う(実体はここ1つだけ)。"""
     text = html_bytes.decode("utf-8")
     text = _script_src_re().sub(lambda m: f'src="{m.group(1)}?v={version}"', text)
+    # theme.css は room ではなく core 固定の1枚(全ページ共通)なので、上の room 集合とは別に
+    # ここで直接足す(2026-09-27 ライトテーマ)。
+    text = text.replace('href="/theme.css"', f'href="/theme.css?v={version}"')
     if inject_meta:
         text = text.replace(
             "<head>", f'<head>\n<meta name="tp-version" content="{version}">', 1
