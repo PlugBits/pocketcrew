@@ -943,6 +943,9 @@ function renderTail(tailEl,s){
   } else if(more){more.remove();}
   let log=tailEl.querySelector(':scope > .chatlog');
   if(!log){log=document.createElement('div'); log.className='chatlog'; tailEl.appendChild(log);}
+  // 画像のサムネが点滅しないように(2026-09-28): 作り直す前に読み込み済みの <img> を取っておき、
+  // 作り直したあと同じ src のものと差し替える(毎回 <img> を新しく作ると、読み込み直しで一瞬消えていた)
+  const keepImgs=new Map(); log.querySelectorAll('img.pimg-th').forEach(im=>{const k=im.getAttribute('src'); if(im.complete&&im.naturalWidth&&!keepImgs.has(k)) keepImgs.set(k,im);});
   const items=blocks.map(x=>({x,key:chatKey(x),html:chatBlockHTML(x)})).filter(it=>it.html);
   const kids=Array.from(log.children);
   const oldKeys=kids.map(k=>k.dataset.key);
@@ -959,6 +962,7 @@ function renderTail(tailEl,s){
     log.insertAdjacentHTML('beforeend',items[i].html);
     const el=log.lastElementChild; el.dataset.key=items[i].key; el.dataset.role=items[i].x.role;
   }
+  if(keepImgs.size) log.querySelectorAll('img.pimg-th').forEach(im=>{const old=keepImgs.get(im.getAttribute('src')); if(old&&old!==im&&!old.isConnected){im.replaceWith(old); keepImgs.delete(im.getAttribute('src'));}});
 }
 // 罫線の表 → HTML table。セル内の折り返し行(先頭セルが空の行)は前の行に連結
 function renderTable(lines){const rows=[]; let cur=null;
