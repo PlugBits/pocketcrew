@@ -11,7 +11,7 @@ rooms/             公開の room(機能フォルダ)。_template・vault・work
 rooms-private/     あなた専用の room を置く場所(git 管理外・.gitignore 済み)
 config.toml        あなたの設定(config.example.toml をコピーして作る。git 管理外)
 presets.json        新しいスレを開くときの初期プロンプト集(presets.example.json をコピーして作る。git 管理外)
-.claude/skills/make-room/   room を作るスキル(このファイルの「room の足し方」参照)
+.claude/skills/make-room/   room を作るスキル(このファイルの「room の足し方」参照)。parts/ 以下に選べる部品(コピーボタン・画像の保存・拡大表示・一覧→詳細)がある
 ```
 
 ## 絶対のルール

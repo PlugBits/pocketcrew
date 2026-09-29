@@ -20,7 +20,42 @@ description: ポケクル(Pocket Crew)に新しい room(機能のフォルダ1�
 - 「自分だけの記録」「個人的な内容」なら `rooms-private/<id>/`(git 管理外・公開リポジトリに乗らない)
 - 迷ったら、または明言が無ければ `rooms-private/<id>/` を選ぶ(あとから `rooms/` に `mv` すればよいだけなので、安全な側に倒す)
 
-### 3. `_template` をコピーする
+### 3. 部品を選ぶ
+
+`.claude/skills/make-room/parts/` には、よく使う画面パーツが1つ1ファイルで置いてある。
+room の要件に合いそうなものがあれば、AskUserQuestion で確認してから使う(自分で決め打ちで
+入れない。ただし下記の「聞かずに決めてよい場合」は例外)。
+
+- `parts/copy-buttons.md` — テキストをコピーするボタン(本文/タグを分けて別々にコピー、など)
+- `parts/image-gallery.md` — 画像の一覧+長押し保存+まとめて保存
+- `parts/image-viewer.md` — サムネイルをタップしたときの全画面拡大表示(`image-gallery` とセットで使うことが多い)
+- `parts/list-detail.md` — 一覧→詳細を同じページ内で(「今日」「明日」バッジ+並び替え込み)
+
+**聞き方のルール(重要)**:
+
+- この司令室は AskUserQuestion を出しても**電話の画面には1問目しか映らない**。1回の
+  AskUserQuestion 呼び出しの `questions` 配列には**必ず1問だけ**入れる。複数の部品をまとめて
+  1回で聞かない(必ず部品ごとに呼び出しを分ける)
+- 聞く順番は固定でよい: ① `list-detail`(一覧+詳細にする?)→ ② `copy-buttons`(コピー
+  ボタンを付ける?)→ ③ `image-gallery`(画像の保存を付ける?)→ ④ `image-viewer`
+  (画像をタップで拡大表示できるようにする?。③ が「いいえ」なら聞かずに「いいえ」にする)
+- 各質問は「〇〇を付けますか?」のような、はい/いいえで答えられる形にする
+- **ユーザーの要望からすでに答えが明らかな部品は聞かずに決める**。例:「画像を保存したい」
+  と言われたら `image-gallery` は聞かずに「はい」。「一覧から選んで開きたい」なら
+  `list-detail` は聞かずに「はい」。「コピペしたい」なら `copy-buttons` は聞かずに「はい」。
+  要望に出てこない部品だけ質問する
+- ユーザーが「おまかせ」と言った場合は、どの部品も聞かずに、要件から妥当な組み合わせを自分で
+  決めてよい(読書記録のような単純な記録ものなら基本は部品なし、投稿文の貼り付けのような
+  ものなら `copy-buttons`、画像つきの記録なら `image-gallery`+`image-viewer`、など)
+- 選び終えたら、確認や質問を重ねずに「これで作ります: 一覧+詳細・コピーボタン」のように
+  **選んだ部品を1行で言ってから**、そのまま次の手順(`_template` のコピー)に進む。選んだ
+  部品が無ければ「部品はなしで作ります」のように1行で言う
+
+各部品の組み込み方(api.py 側・page.html の CSS・page.js のコード・確認のしかた・つまずき)
+は、それぞれの `parts/*.md` に書いてある。コピペで使える完成形のコードなので、そのまま
+`_template` の該当箇所に足せばよい。
+
+### 4. `_template` をコピーする
 
 ```sh
 cp -r rooms/_template rooms-private/<id>
@@ -29,17 +64,17 @@ rm rooms-private/<id>/README.md   # 雛形の説明書。新しい room には�
 
 (公開する場合は `rooms/<id>`)
 
-### 4. `room.json` を書き換える
+### 5. `room.json` を書き換える
 
 `name`/`icon`/`order` を決めた値に。`menu` は「⋯メニューに出すか」で、シンプルな1項目なら `true` のままでよい。
 
-### 5. `page.html`/`page.js`/`api.py`/`jobs.py` を要件に合わせて書き換える
+### 6. `page.html`/`page.js`/`api.py`/`jobs.py` を要件に合わせて書き換える
 
 `_template` はそのまま「1行メモ帳」として動く(一覧+追加フォーム)。多くの「記録する系」の room はこの形の変形で足りる。保存先は vault 内の1つの Markdown ファイル(既定 `<id>/log.md`。`util.safe_path()` で vault の外に出るパスは弾かれる)。
 
 具体的な書き方は下の「worked example」を型として使う。
 
-### 6. データの置き場を決める
+### 7. データの置き場を決める
 
 vault 配下の相対パス(`config.toml` の `[paths] vault` が指すフォルダからの相対パス)にする。雛形の既定は `<room id>/log.md`。ファイル名を変えたいときは、`api.py` の既定値を書き換えるか(下の読書記録の例は `books.md` にしている)、`config.toml` で上書きする:
 
@@ -48,14 +83,23 @@ vault 配下の相対パス(`config.toml` の `[paths] vault` が指すフォル
 file = "reading/books.md"
 ```
 
-### 7. 再起動して確認する
+### 8. 再起動して確認する
 
 ```sh
 systemctl --user restart pocketcrew   # 環境によっては launchctl kickstart -k gui/$UID/com.pocketcrew、または python3 server.py の再起動
 curl -s http://127.0.0.1:8787/api/rooms | python3 -m json.tool
 ```
 
-自分の room の `"error"` が `null` であることを確認する(`null` 以外ならエラーメッセージが入っているので、それを読んで直す)。問題なければブラウザ/スマホで `/<id>` を開き、一覧と追加フォームが出ることを確かめる。
+自分の room の `"error"` が `null` であることを確認する(`null` 以外ならエラーメッセージが入っているので、それを読んで直す)。問題なければブラウザ/スマホで `/<id>` を開き、一覧と追加フォームが出ることを確かめる。部品を使った場合は、選んだ部品ごとに `parts/<部品名>.md` の「確認のしかた」も1つずつ見る。
+
+### どの room にも効く決まり
+
+部品を使う/使わないに関わらず、すべての room に共通で当てはまる決まり:
+
+- タップ対象(ボタン・行・リンク)は最低 48px 四方にする
+- 390px 幅で横スクロールが出ないようにする(はみ出す要素が無いか確認する)
+- 「できた」と言う前に、必ず 390px 幅の画面(スマホ相当)で見てから言う
+- コード(`page.html`/`page.js`/`api.py`/`jobs.py`)を変えたら、確認の前に必ず再起動する(ホットリロードは無いので、変更前の内容のまま確認してしまう事故を防ぐ)
 
 ### よくあるつまずき
 
@@ -313,4 +357,4 @@ systemctl --user restart pocketcrew
 curl -s http://127.0.0.1:8787/api/rooms | python3 -m json.tool | grep -A5 '"reading"'
 ```
 
-`"error": null` を確認したら、`/reading` を開いてタイトルを1件追加し、一覧に出るか見る。`~/vault/reading/books.md` にも行が増えているはず。
+`"error": null` を確認したら、`/reading` を開いてタイトルを1件追加し、一覧に出るか見る。`~/vault/reading/books.md` にも行が増えているはず。部品を足した room を作ったときは、ここで選んだ部品ごとに `parts/<部品名>.md` の「確認のしかた」を1つずつ実際にやってから「できた」と言う(例: `image-gallery` を選んだなら、まとめて保存ボタンが実際に共有シートを開くかまで確かめる)。
